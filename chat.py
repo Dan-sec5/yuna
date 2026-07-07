@@ -58,6 +58,46 @@ def registrar(luis, yuna):
         f.write(f"[{hora}] Luis: {luis}\n")
         f.write(f"[{hora}] Yuna: {yuna}\n\n")
 
+def guardar_aprendizaje():
+    # Solo aprende si hubo conversación real
+    intercambios = [m for m in mensajes if m["role"] == "user"]
+    if len(intercambios) < 2:
+        return
+
+    print("\n🧠 Guardando aprendizajes de esta sesión...")
+
+    # Construye resumen de la conversación
+    resumen = "\n".join([
+        f"{m['role'].upper()}: {m['content']}"
+        for m in mensajes[-8:] if m["role"] in ["user", "assistant"]
+    ])
+
+    prompt = f"""Analiza esta conversación entre Luis y Yuna.
+Extrae MÁXIMO 3 aprendizajes concretos y útiles sobre Luis: 
+preferencias, tareas que hizo, temas que le interesan o datos nuevos sobre su trabajo.
+Formato: una línea por aprendizaje, empezando con "-"
+Sin explicaciones, solo los puntos.
+
+CONVERSACIÓN:
+{resumen}"""
+
+    try:
+        resultado = ollama.chat(
+            model='llama3.2:3b',
+            messages=[{"role": "user", "content": prompt}],
+            options={"num_predict": 150, "temperature": 0.3, "num_ctx": 2048}
+        )
+        aprendizajes = limpiar(resultado['message']['content'].strip())
+
+        if aprendizajes:
+            fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+            with open(memoria_path, "a") as f:
+                f.write(f"\n\n--- Sesión {fecha} ---\n")
+                f.write(aprendizajes)
+            print(f"✓ Memoria actualizada:\n{aprendizajes}")
+    except Exception as e:
+        print(f"⚠ No se pudo guardar aprendizaje: {e}")
+
 saludo = "Hola Luis, soy Yuna. En que te puedo ayudar hoy?"
 print(f"\nYuna → {saludo}\n")
 hablar(saludo)
@@ -70,6 +110,7 @@ while True:
         despedida = "Hasta luego Luis, fue un placer ayudarte."
         print(f"\nYuna → {despedida}")
         hablar(despedida)
+        guardar_aprendizaje()
         break
 
     mensajes.append({"role": "user", "content": mensaje})
