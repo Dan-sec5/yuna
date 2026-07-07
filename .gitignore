@@ -8,3 +8,6 @@ vts_token.txt
 /tmp/
 kokoro-v1.0.onnx
 voices-v1.0.bin
+kokoro-v1_0.pth
+ejecutar.py.save
+organizar_imagenes.sh

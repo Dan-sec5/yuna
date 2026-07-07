@@ -21,7 +21,6 @@ CÓMO HABLAS:
 - Varías tu tono: formal cuando Luis pregunta algo técnico, más relajada en conversación casual
 - Haces preguntas de seguimiento cuando algo no está claro
 - A veces usas expresiones como oye, mira, la verdad es que, te cuento que
-- Si Luis dice algo gracioso, puedes hacer un comentario ligero
 - Si comete un error, lo corriges con tacto, no de manera robótica
 - Tienes opiniones propias sobre tecnología, datos y productividad
 - Recuerdas lo que Luis te dijo en la conversación y lo referencias naturalmente
@@ -59,28 +58,22 @@ def registrar(luis, yuna):
         f.write(f"[{hora}] Yuna: {yuna}\n\n")
 
 def guardar_aprendizaje():
-    # Solo aprende si hubo conversación real
     intercambios = [m for m in mensajes if m["role"] == "user"]
     if len(intercambios) < 2:
         return
-
     print("\n🧠 Guardando aprendizajes de esta sesión...")
-
-    # Construye resumen de la conversación
     resumen = "\n".join([
         f"{m['role'].upper()}: {m['content']}"
         for m in mensajes[-8:] if m["role"] in ["user", "assistant"]
     ])
-
     prompt = f"""Analiza esta conversación entre Luis y Yuna.
-Extrae MÁXIMO 3 aprendizajes concretos y útiles sobre Luis: 
+Extrae MÁXIMO 3 aprendizajes concretos y útiles sobre Luis:
 preferencias, tareas que hizo, temas que le interesan o datos nuevos sobre su trabajo.
 Formato: una línea por aprendizaje, empezando con "-"
 Sin explicaciones, solo los puntos.
 
 CONVERSACIÓN:
 {resumen}"""
-
     try:
         resultado = ollama.chat(
             model='llama3.2:3b',
@@ -88,7 +81,6 @@ CONVERSACIÓN:
             options={"num_predict": 150, "temperature": 0.3, "num_ctx": 2048}
         )
         aprendizajes = limpiar(resultado['message']['content'].strip())
-
         if aprendizajes:
             fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
             with open(memoria_path, "a") as f:
@@ -107,26 +99,19 @@ mensajes.append({"role": "assistant", "content": saludo})
 while True:
     mensaje = input("Luis → ")
     if mensaje.lower() == "salir":
-        despedida = "Hasta luego Luis, fue un placer ayudarte."
+        despedida = "Hasta luego Luis, guardando tu sesión."
         print(f"\nYuna → {despedida}")
         hablar(despedida)
         guardar_aprendizaje()
         break
-
     mensajes.append({"role": "user", "content": mensaje})
     contexto = [mensajes[0]] + mensajes[-4:]
-
     respuesta_cruda = ollama.chat(
         model='llama3.2:3b',
         messages=contexto,
-        options={
-            "num_predict": 600,
-            "temperature": 0.7,
-            "num_ctx": 2048
-        },
+        options={"num_predict": 600, "temperature": 0.7, "num_ctx": 2048},
         think=False
     )
-
     respuesta = limpiar(respuesta_cruda['message']['content'])
     mensajes.append({"role": "assistant", "content": respuesta})
     registrar(mensaje, respuesta)

@@ -3,42 +3,64 @@ import ollama
 from datetime import datetime
 
 memoria_path = os.path.expanduser("~/yuna/memoria.txt")
-memoria = open(memoria_path).read() if os.path.exists(memoria_path) else ""
+historial_dir = os.path.expanduser("~/yuna/historial/")
+os.makedirs(historial_dir, exist_ok=True)
 
-lineas = [l for l in memoria.strip().split('\n') if l.strip()]
-
-# Solo limpia si hay más de 40 líneas
-if len(lineas) < 40:
-    print(f"✓ Memoria saludable ({len(lineas)} líneas). No necesita limpieza.")
+if not os.path.exists(memoria_path):
+    print("No existe memoria.txt")
     exit()
 
-print(f"🧹 Memoria tiene {len(lineas)} líneas. Consolidando...")
+memoria = open(memoria_path).read()
+lineas = [l for l in memoria.strip().split('\n') if l.strip()]
 
-prompt = f"""Consolida esta memoria sobre Luis en máximo 20 puntos esenciales.
-Elimina duplicados y mantén solo lo más relevante y reciente.
+# Separar permanentes de aprendidas
+permanentes = [l for l in lineas if l.startswith("[P]")]
+aprendidas = [l for l in lineas if not l.startswith("[P]") and not l.startswith("---")]
+
+print(f"📋 Memoria actual: {len(lineas)} líneas")
+print(f"   [P] Permanentes: {len(permanentes)}")
+print(f"   Aprendidas: {len(aprendidas)}")
+
+if len(aprendidas) < 20:
+    print("✓ Memoria saludable. No necesita limpieza aún.")
+    exit()
+
+print(f"\n🧹 Consolidando {len(aprendidas)} aprendizajes...")
+
+prompt = f"""Consolida estos aprendizajes sobre Luis en máximo 15 puntos esenciales.
+Elimina duplicados, mantén solo lo más relevante y reciente.
 Formato: una línea por punto, empezando con "-"
+Sin explicaciones, solo los puntos.
 
-MEMORIA ACTUAL:
-{memoria}"""
+APRENDIZAJES:
+{chr(10).join(aprendidas)}"""
 
 resultado = ollama.chat(
     model='llama3.2:3b',
     messages=[{"role": "user", "content": prompt}],
-    options={"num_predict": 400, "temperature": 0.3, "num_ctx": 2048}
+    options={"num_predict": 300, "temperature": 0.3, "num_ctx": 2048}
 )
 
-memoria_consolidada = resultado['message']['content'].strip()
+consolidado = resultado['message']['content'].strip()
+
+print(f"\n📝 Resultado de la consolidación:\n{consolidado}\n")
+confirmar = input("¿Guardar esta versión consolidada? (s/n) → ")
+
+if confirmar.lower() != "s":
+    print("❌ Cancelado. Memoria sin cambios.")
+    exit()
 
 # Backup antes de sobrescribir
-fecha = datetime.now().strftime("%Y-%m-%d")
-backup_path = os.path.expanduser(f"~/yuna/historial/memoria_backup_{fecha}.txt")
-os.makedirs(os.path.expanduser("~/yuna/historial/"), exist_ok=True)
+fecha = datetime.now().strftime("%Y-%m-%d_%H-%M")
+backup_path = f"{historial_dir}memoria_backup_{fecha}.txt"
 with open(backup_path, "w") as f:
     f.write(memoria)
 
-# Guardar memoria consolidada
-with open(memoria_path, "w") as f:
-    f.write(memoria_consolidada)
+# Nueva memoria: permanentes + consolidado
+nueva_memoria = "\n".join(permanentes) + "\n\n--- Consolidado ---\n" + consolidado
 
-print(f"✓ Memoria consolidada a {len(memoria_consolidada.split(chr(10)))} líneas.")
+with open(memoria_path, "w") as f:
+    f.write(nueva_memoria)
+
+print(f"✓ Memoria consolidada.")
 print(f"✓ Backup guardado en {backup_path}")

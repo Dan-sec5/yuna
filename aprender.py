@@ -1,33 +1,40 @@
 import os
 import ollama
+from datetime import datetime
 
-def consolidar_memoria():
-    bitacora_path = os.path.expanduser("~/yuna/bitacora.txt")
-    memoria_path = os.path.expanduser("~/yuna/memoria.txt")
-    
-    if not os.path.exists(bitacora_path) or os.path.getsize(bitacora_path) == 0:
-        return
+bitacora_path = os.path.expanduser("~/yuna/bitacora.txt")
+memoria_path = os.path.expanduser("~/yuna/memoria.txt")
 
-    with open(bitacora_path, 'r') as f:
-        contenido_bitacora = f.read()
-    
-    with open(memoria_path, 'r') as f:
-        memoria_actual = f.read()
+if not os.path.exists(bitacora_path) or os.path.getsize(bitacora_path) == 0:
+    print("No hay bitácora aún. Usa yuna-chat primero.")
+    exit()
 
-    prompt = f"""Analiza la siguiente bitácora de conversaciones y la memoria actual. 
-    Extrae nuevos patrones de trabajo, preferencias de Luis y correcciones de tareas. 
-    Actualiza la memoria para que sea más precisa.
-    
-    Memoria actual: {memoria_actual}
-    Bitácora reciente: {contenido_bitacora}
-    
-    Responde SOLO con el texto actualizado para el archivo memoria.txt, 
-    sin explicaciones ni texto extra."""
+bitacora = open(bitacora_path).read()
+print("🧠 Analizando tus actividades...")
 
-    respuesta = ollama.chat(model='qwen3:4b', messages=[{"role": "user", "content": prompt}])
-    nueva_memoria = respuesta['message']['content']
+prompt = f"""Analiza esta bitácora de conversaciones y extrae:
+1. Las tareas que Luis hace con más frecuencia
+2. Los horarios en que más usa el asistente
+3. Sus temas de trabajo más comunes
+4. Sugerencias de automatización útiles para él
 
-    with open(memoria_path, 'w') as f:
-        f.write(nueva_memoria.strip())
-    
-    print("✓ Memoria actualizada con nuevos patrones.")
+Bitácora:
+{bitacora}
+
+Responde en español, de forma concisa y estructurada."""
+
+resultado = ollama.chat(
+    model='llama3.2:3b',
+    messages=[{"role": "user", "content": prompt}],
+    options={"num_predict": 400, "temperature": 0.3, "num_ctx": 2048}
+)
+
+patrones = resultado['message']['content'].strip()
+print(f"\n📊 Patrones detectados:\n{patrones}\n")
+
+fecha = datetime.now().strftime("%Y-%m-%d")
+with open(memoria_path, "a") as f:
+    f.write(f"\n\n--- Patrones aprendidos ({fecha}) ---\n")
+    f.write(patrones)
+
+print("✓ Memoria actualizada con tus patrones de uso.")

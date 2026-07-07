@@ -1,9 +1,17 @@
-Un fideicomiso es una inversión financiera donde se crea un fondo para gestionar los activos de una persona, generalmente para beneficio de un menor o persona con discapacidad. El Administrador Maestro es el responsable de gestionar el fideicomiso y ofrecerle servicios al cliente, como:
+[P] Usuario: Luis
+[P] Trabajo: Analista de reportes de fideicomisos
+[P] Herramientas: SQL, Power BI, Excel con VBA, Python
+[P] Carpetas: PDF en ~/Desktop/Reportes, Excel en ~/Desktop/Datos
+[P] Mac: MacBook Air M2, 16GB RAM
+[P] Idioma: español mexicano
+[P] Modelo Ollama activo: llama3.2:3b
+[P] Intereses: IA, trading algorítmico, Codecademy, videojuegos
 
+--- Aprendizajes de sesiones ---
+Un fideicomiso es una inversión financiera donde se crea un fondo para gestionar los activos de una persona, generalmente para beneficio de un menor o persona con discapacidad. El Administrador Maestro es el responsable de gestionar el fideicomiso y ofrecerle servicios al cliente, como:
 * Gestión de la cartera de inversión
 * Revisión y actualización de los objetivos financieros
 * Supervisión del rendimiento del fideicomiso
 * Asesoramiento financiero y orientación
 * Administración de los pagos y distribuciones
-
 En esencia, el Administrador Maestro se encarga de llevar el fideicomiso a cabo de manera eficiente y segura, para que el cliente pueda disfrutar de sus activos sin preocupaciones.

@@ -1,4 +1,3 @@
-from aprender import consolidar_memoria
 import customtkinter as ctk
 from PIL import Image
 import subprocess
@@ -11,11 +10,10 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 def buscar_avatar():
-    extensiones_validas = ['.gif', '.png', '.jpg', '.jpeg', '.webp']
-    for ext in extensiones_validas:
-        archivos = glob.glob(os.path.expanduser(f'~/yuna/avatar{ext}'))
-        if archivos:
-            return archivos[0]
+    for patron in ['avatar.gif', 'avatar.png', 'avatar.jpg', 'avatar.jpeg', 'avatar.webp']:
+        ruta = os.path.expanduser(f'~/yuna/{patron}')
+        if os.path.exists(ruta):
+            return ruta
     return None
 
 img_path = buscar_avatar()
@@ -32,9 +30,9 @@ alto = int(alto_orig * proporcion)
 
 app = ctk.CTk()
 app.title("Yuna")
-app.geometry(f"{ancho+20}x{alto+180}+50+350")
+app.geometry(f"{ancho+20}x{alto+190}+50+350")
 app.attributes("-topmost", True)
-app.attributes("-alpha", 0.94)
+app.attributes("-alpha", 0.97)
 app.overrideredirect(True)
 app.configure(fg_color="#1a1a2e")
 
@@ -93,33 +91,34 @@ btn_aprender = ctk.CTkButton(
 btn_aprender.pack(pady=3)
 
 def cerrar_yuna():
-    # 1. Ejecutar el proceso de aprendizaje/resumen
-    print("Yuna está procesando lo aprendido hoy...")
-    consolidar_memoria()
-    
-    # 2. Archivar bitácora
+    # Guardar sesión de bitácora en historial
     bitacora = os.path.expanduser("~/yuna/bitacora.txt")
     historial_dir = os.path.expanduser("~/yuna/historial/")
     os.makedirs(historial_dir, exist_ok=True)
-    
-    if os.path.exists(bitacora):
+
+    if os.path.exists(bitacora) and os.path.getsize(bitacora) > 0:
         fecha = datetime.now().strftime("%Y-%m-%d_%H-%M")
         destino = f"{historial_dir}sesion_{fecha}.txt"
-        os.rename(bitacora, destino)
-        open(bitacora, 'w').close()
-    
-    # 3. Liberar recursos
-    subprocess.run(["ollama", "stop", "qwen3:4b"], capture_output=True)
+        # Copia en lugar de mover para no perder si falla
+        with open(bitacora, "r") as src, open(destino, "w") as dst:
+            dst.write(src.read())
+        open(bitacora, 'w').close()  # Limpia bitácora
+
+    # Detener modelo para liberar RAM
+    subprocess.run(["ollama", "stop", "llama3.2:3b"], capture_output=True)
+
     app.destroy()
-    
+
 btn_cerrar = ctk.CTkButton(
     app, text="❌  Cerrar Yuna", width=ancho,
     fg_color="#7f1d1d", hover_color="#5c1414",
     command=cerrar_yuna
 )
 btn_cerrar.pack(pady=(3, 8))
+
 def mover(e):
     app.geometry(f"+{e.x_root - (ancho//2 + 10)}+{e.y_root - alto//2}")
+
 label_img.bind("<B1-Motion>", mover)
 nombre.bind("<B1-Motion>", mover)
 
