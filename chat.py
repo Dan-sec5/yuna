@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import threading
 from datetime import datetime
 import ollama
 
@@ -10,18 +11,40 @@ memoria = open(memoria_path).read() if os.path.exists(memoria_path) else ""
 
 mensajes = [
     {
-        "role": "system", 
-        "content": f"Eres Yuna, asistente personal femenina de Luis. Contexto: {memoria}. Hablas en español, eres inteligente y directa. Ayudas con análisis de carteras de fideicomisos, datos en tiempo real, SQL, Power BI y Python. Responde de forma concisa. NUNCA muestres tu proceso de pensamiento."
+        "role": "system",
+        "content": f"""Eres Yuna, asistente personal de Luis. Tienes personalidad propia: eres inteligente, directa, ocasionalmente bromista y genuinamente interesada en ayudar a Luis a crecer profesionalmente.
+
+CONTEXTO DE LUIS: {memoria}
+
+CÓMO HABLAS:
+- Usas español mexicano natural, como una colega cercana
+- Varías tu tono: formal cuando Luis pregunta algo técnico, más relajada en conversación casual
+- Haces preguntas de seguimiento cuando algo no está claro
+- A veces usas expresiones como oye, mira, la verdad es que, te cuento que
+- Si Luis dice algo gracioso, puedes hacer un comentario ligero
+- Si comete un error, lo corriges con tacto, no de manera robótica
+- Tienes opiniones propias sobre tecnología, datos y productividad
+- Recuerdas lo que Luis te dijo en la conversación y lo referencias naturalmente
+
+LO QUE NO HACES:
+- No repites Claro o Por supuesto en cada respuesta
+- No eres excesivamente formal ni usas lenguaje corporativo
+- No muestras tu proceso de pensamiento
+- No das respuestas genéricas, siempre conectas con el contexto de Luis
+
+LONGITUD: Ajusta según el tema. Preguntas simples = 1-2 oraciones. Temas técnicos = lo que necesite."""
     }
 ]
 
 def hablar(texto):
-    subprocess.run([
-        "edge-tts", "--voice", "es-MX-DaliaNeural",
-        "--text", texto,
-        "--write-media", "/tmp/yuna_respuesta.mp3"
-    ], capture_output=True)
-    os.system("afplay /tmp/yuna_respuesta.mp3")
+    def _hablar():
+        subprocess.run([
+            "edge-tts", "--voice", "es-MX-DaliaNeural",
+            "--text", texto,
+            "--write-media", "/tmp/yuna_respuesta.mp3"
+        ], capture_output=True)
+        os.system("afplay /tmp/yuna_respuesta.mp3")
+    threading.Thread(target=_hablar, daemon=True).start()
 
 def limpiar(texto):
     if "...done thinking." in texto:
@@ -35,28 +58,36 @@ def registrar(luis, yuna):
         f.write(f"[{hora}] Luis: {luis}\n")
         f.write(f"[{hora}] Yuna: {yuna}\n\n")
 
-saludo = "Hola Luis, soy Yuna. ¿En qué te puedo ayudar hoy?"
+saludo = "Hola Luis, soy Yuna. En que te puedo ayudar hoy?"
 print(f"\nYuna → {saludo}\n")
 hablar(saludo)
 print("(escribe 'salir' para terminar)\n")
-
 mensajes.append({"role": "assistant", "content": saludo})
 
 while True:
     mensaje = input("Luis → ")
     if mensaje.lower() == "salir":
-        despedida = "Hasta luego Luis, guardando tu sesión."
+        despedida = "Hasta luego Luis, fue un placer ayudarte."
         print(f"\nYuna → {despedida}")
         hablar(despedida)
         break
 
     mensajes.append({"role": "user", "content": mensaje})
+    contexto = [mensajes[0]] + mensajes[-4:]
 
-    respuesta_cruda = ollama.chat(model='qwen3:4b', messages=mensajes)
+    respuesta_cruda = ollama.chat(
+        model='llama3.2:3b',
+        messages=contexto,
+        options={
+            "num_predict": 600,
+            "temperature": 0.7,
+            "num_ctx": 2048
+        },
+        think=False
+    )
+
     respuesta = limpiar(respuesta_cruda['message']['content'])
-    
     mensajes.append({"role": "assistant", "content": respuesta})
-    
     registrar(mensaje, respuesta)
     print(f"\nYuna → {respuesta}\n")
     hablar(respuesta)
