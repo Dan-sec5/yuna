@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.save
+.DS_Store
+bitacora.txt
+historial/
+vts_token.txt
+/tmp/
+kokoro-v1.0.onnx
+voices-v1.0.bin
