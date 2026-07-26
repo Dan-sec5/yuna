@@ -91,6 +91,22 @@ btn_aprender = ctk.CTkButton(
 btn_aprender.pack(pady=3)
 
 def cerrar_yuna():
+    # Cerrar terminales abiertas por Yuna
+    os.system("""osascript -e '
+    tell application "Terminal"
+        set windowList to every window
+        repeat with w in windowList
+            set tabList to every tab of w
+            repeat with t in tabList
+                set cmd to custom title of t
+                if cmd contains "yuna" then
+                    close w
+                    exit repeat
+                end if
+            end repeat
+        end repeat
+    end tell'""")
+
     # Guardar sesión de bitácora en historial
     bitacora = os.path.expanduser("~/yuna/bitacora.txt")
     historial_dir = os.path.expanduser("~/yuna/historial/")
@@ -99,10 +115,9 @@ def cerrar_yuna():
     if os.path.exists(bitacora) and os.path.getsize(bitacora) > 0:
         fecha = datetime.now().strftime("%Y-%m-%d_%H-%M")
         destino = f"{historial_dir}sesion_{fecha}.txt"
-        # Copia en lugar de mover para no perder si falla
         with open(bitacora, "r") as src, open(destino, "w") as dst:
             dst.write(src.read())
-        open(bitacora, 'w').close()  # Limpia bitácora
+        open(bitacora, "w").close()
 
     # Detener modelo para liberar RAM
     subprocess.run(["ollama", "stop", "llama3.2:3b"], capture_output=True)
