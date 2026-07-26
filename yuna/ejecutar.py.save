@@ -1,0 +1,23 @@
+import subprocess
+import os
+
+print("🤖 Yuna ejecutora - escribe tu tarea o 'salir'")
+print("----------------------------------------")
+
+while True:
+    tarea = input("\n    if tarea.lower() == "salir":
+        break
+    
+    resultado = subprocess.run(
+        ["ollama", "run", "qwen3:4b", 
+         f"Responde ÚNICAMENTE con un comando bash de una sola línea, sin explicación, sin markdown, sin texto extra. Tarea: {tarea}"],
+        capture_output=True, text=True
+    )
+    
+    comando = resultado.stdout.strip()
+    print(f"\n📋 Comando: {comando}")
+    confirmar = input("¿Ejecuto? (s/n) → ")
+    
+    if confirmar.lower() == "s":
+        os.system(comando)
+        print("✓ Listo")
