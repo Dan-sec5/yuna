@@ -124,6 +124,13 @@ def cerrar_yuna():
 
     app.destroy()
 
+btn_agente = ctk.CTkButton(
+    app, text="🤖  Modo Agente", width=ancho,
+    fg_color="#7C3AED", hover_color="#5B21B6",
+    command=lambda: abrir_terminal("yuna-agente")
+)
+btn_agente.pack(pady=3)
+
 btn_cerrar = ctk.CTkButton(
     app, text="❌  Cerrar Yuna", width=ancho,
     fg_color="#7f1d1d", hover_color="#5c1414",

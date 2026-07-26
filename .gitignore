@@ -1,9 +1,24 @@
-__pycache__/
-*.pyc
-*.save
-.DS_Store
+# Datos personales
+memoria.txt
 bitacora.txt
 historial/
-vts_token.txt
-memoria.txt
 avatar.png
+avatar.gif
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.save
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Archivos legacy
+iniciar.sh
+organizar_imagenes.sh
+ejecutar.py.save
+vts_token.txt
