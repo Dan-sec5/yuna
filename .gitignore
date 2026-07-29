@@ -11,14 +11,27 @@ __pycache__/
 *.pyo
 *.pyd
 *.save
+.venv/
+*.egg-info/
 
 # Mac
 .DS_Store
 .AppleDouble
-.LSOverride
+
+# Backups
+.backup_*/
 
 # Archivos legacy
 iniciar.sh
 organizar_imagenes.sh
 ejecutar.py.save
 vts_token.txt
+config.json
+
+# Base de datos y logs
+data/*.db
+logs/*.log
+*.db
+
+# Variables de entorno
+.env
