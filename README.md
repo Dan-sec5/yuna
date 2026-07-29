@@ -1,50 +1,134 @@
-# Yuna — Agente IA Personal
+# Yuna — Agente IA Local
 
-Asistente y agente IA local para macOS, construido con Ollama + llama3.2:3b.
-100% gratuito, privado y sin conexión a internet (excepto búsqueda web y voz).
+Asistente personal con ejecución de herramientas, memoria persistente y voz.
 
-## Stack
-- **LLM**: Ollama + llama3.2:3b (local, sin internet)
-- **Voz**: edge-tts DaliaNeural (español mexicano)
-- **Interfaz**: CustomTkinter (avatar flotante)
-- **Agente**: Sistema de herramientas modulares
+## Estructura
 
-## Archivos principales
-| Archivo | Función |
-|---|---|
-| `chat.py` | Modo conversación con voz y memoria |
-| `agente.py` | Modo agente con herramientas autónomas |
-| `avatar.py` | Interfaz gráfica flotante |
-| `aprender.py` | Análisis de bitácora y aprendizaje |
-| `ejecutar.py` | Ejecutor de comandos bash |
-| `limpiar_memoria.py` | Consolidación de memoria |
-| `tools/` | Módulos de herramientas del agente |
-
-## Herramientas del agente
-- `tools/archivos.py` — Gestión de archivos del sistema
-- `tools/datos.py` — Análisis de Excel, CSV y PDF
-- `tools/web.py` — Búsqueda web y precios de activos
-- `tools/sistema.py` — Acciones en macOS
+```
+yuna/
+├── app.py                 # Entry point
+├── config/
+│   ├── config.json        # Configuración central
+│   └── __init__.py
+├── core/                  # Núcleo del agente
+│   ├── agent.py           # Loop Plan→Execute→Evaluate
+│   ├── llm.py             # Wrapper Ollama + tool calling
+│   ├── planner.py         # System prompt & parsing
+│   ├── executor.py        # Ejecuta tools con permisos
+│   ├── evaluator.py       # Evalúa resultados
+│   └── context.py         # Manejo de contexto + memoria
+├── tools/                 # Herramientas registradas
+│   ├── registry.py        # Dict {name: function}
+│   ├── schemas.py         # JSON Schema para Ollama
+│   ├── permisos.py        # SAFE / CONFIRM / DANGEROUS
+│   ├── archivos.py        # FS: buscar, listar, organizar
+│   ├── datos.py           # Data: Excel, CSV, PDF
+│   ├── web.py             # Web: search, precios, noticias
+│   ├── sistema.py         # Sistema: bash, notify, files
+│   └── __init__.py
+├── memory/                # Memoria SQLite
+│   ├── manager.py         # CRUD preferencias, episodic, tareas
+│   └── __init__.py
+├── interface/             # Interfaces de usuario
+│   ├── cli.py             # Chat conversacional
+│   ├── agent_cli.py       # Agente autónomo
+│   ├── avatar.py          # GUI flotante (CustomTkinter)
+│   ├── voice.py           # TTS (edge-tts) + STT (Whisper)
+│   └── __init__.py
+├── automation/            # Automatizaciones
+│   ├── scheduler.py       # Cron jobs (APScheduler)
+│   ├── watchers.py        # File watchers (watchdog)
+│   └── __init__.py
+├── data/                  # Datos persistentes
+│   └── yuna.db            # SQLite
+├── logs/                  # Logs de app y auditoría
+├── tests/                 # Tests unitarios
+├── migrate_memoria.py     # Migración única memoria.txt → SQLite
+├── install.sh             # Instalación automática
+└── requirements.txt
+```
 
 ## Instalación
-```bash
-# Requisitos
-brew install ollama
-ollama pull llama3.2:3b
-pip install ollama customtkinter Pillow edge-tts pandas openpyxl pdfplumber yfinance ddgs
 
-# Aliases en ~/.zshrc
-alias yuna="python3 ~/yuna/avatar.py &"
-alias yuna-chat="python3 ~/yuna/chat.py"
-alias yuna-agente="python3 ~/yuna/agente.py"
-alias yuna-ejecutar="python3 ~/yuna/ejecutar.py"
-alias yuna-aprender="python3 ~/yuna/aprender.py"
-alias yuna-limpiar="python3 ~/yuna/limpiar_memoria.py"
+```bash
+cd ~/yuna
+./install.sh
 ```
 
 ## Uso
+
 ```bash
-yuna              # Abre panel de control con avatar
-yuna-chat         # Modo conversación
-yuna-agente       # Modo agente autónomo
+# Chat conversacional
+python app.py chat
+
+# Agente autónomo (usa tools via Ollama tool calling)
+python app.py agent
+
+# GUI flotante
+python app.py avatar
+
+# Migrar memoria antigua
+python app.py migrate
 ```
+
+## Herramientas disponibles
+
+| Tool | Descripción | Permiso |
+|------|-------------|---------|
+| buscar_archivos | Buscar por patrón glob | SAFE |
+| listar_recientes | Archivos modificados últimos N días | SAFE |
+| organizar_archivos | Mover a subcarpetas por tipo | CONFIRM |
+| leer_excel / leer_csv / leer_pdf | Resumen de datos | SAFE |
+| buscar_web | DuckDuckGo search | SAFE |
+| precio_activo | Precio financiero (yfinance) | SAFE |
+| noticias_financieras_mx | Noticias México | SAFE |
+| info_sistema | Disco, memoria, fecha | SAFE |
+| notificar | Notification macOS | SAFE |
+| crear_archivo | Escribir archivo | CONFIRM |
+| ejecutar_bash_seguro | Bash whitelist (ls, cat, grep...) | DANGEROUS |
+| consultar_memoria / escribir_memoria | SQLite | SAFE / CONFIRM |
+
+## Permisos
+
+- **SAFE**: Solo lectura, sin efectos laterales → ejecuta directo
+- **CONFIRM**: Modifica sistema/archivos → pide confirmación
+- **DANGEROUS**: Bash arbitrario → bloqueado por defecto, whitelist estricta
+
+## Configuración
+
+Edita `config/config.json`:
+
+```json
+{
+  "models": {
+    "chat": "gemma2b",
+    "agent": "qwen3:8b"
+  },
+  "permissions": {
+    "confirmations": true
+  }
+}
+```
+
+## Tests
+
+```bash
+pytest tests/ -v
+```
+
+## Memoria
+
+- `preferencias`: clave/valor persistente (nombre, preferencias...)
+- `episodic`: historial de eventos con timestamp
+- `tarea_actual`: estado de tareas en curso (JSON)
+
+Migración automática desde `memoria.txt` y `bitacora.txt` al ejecutar `python app.py migrate`.
+
+## Requisitos
+
+- Python 3.10+
+- Ollama corriendo (`ollama serve`)
+- Modelo `qwen3:8b` (o compatible con tool calling)
+- macOS (para `afplay`, `osascript`, `say`)
+- edge-tts (`pip install edge-tts`)
+- Opcional: Whisper (`pip install openai-whisper`) + sox/ffmpeg para STT

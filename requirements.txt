@@ -1,9 +1,31 @@
+# Core IA
 ollama>=0.3.0
-customtkinter>=5.2.0
-Pillow>=10.0.0
-edge-tts>=6.0.0
+
+# Datos
 pandas>=2.0.0
 openpyxl>=3.1.0
 pdfplumber>=0.10.0
+
+# Web
 yfinance>=0.2.0
 duckduckgo-search>=3.9.0
+
+# UI
+customtkinter>=5.2.0
+Pillow>=10.0.0
+edge-tts>=6.0.0
+
+# Automatización
+apscheduler>=3.10.0
+watchdog>=3.0.0
+
+# Config
+python-dotenv>=1.0.0
+
+# Tests
+pytest>=7.0.0
+pytest-mock>=3.10.0
+
+# Voz (opcional - instalar por separado)
+# openai-whisper>=20231117  # requiere torch
+# sox o ffmpeg para grabación

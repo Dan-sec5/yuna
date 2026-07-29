@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-def leer_excel(ruta):
+def leer_excel(ruta: str) -> str:
     """Lee un Excel y retorna resumen ejecutivo"""
     ruta = os.path.expanduser(ruta)
     try:
@@ -14,13 +14,11 @@ def leer_excel(ruta):
             resumen.append(f"\n--- Hoja: {hoja} ---")
             resumen.append(f"Filas: {len(df)} | Columnas: {len(df.columns)}")
             resumen.append(f"Columnas: {', '.join(df.columns.astype(str).tolist())}")
-            # Columnas numéricas
             numericas = df.select_dtypes(include='number')
             if not numericas.empty:
                 resumen.append("Resumen numérico:")
                 for col in numericas.columns[:5]:
                     resumen.append(f"  {col}: min={numericas[col].min():.2f}, max={numericas[col].max():.2f}, promedio={numericas[col].mean():.2f}")
-            # Valores nulos
             nulos = df.isnull().sum().sum()
             if nulos > 0:
                 resumen.append(f"⚠ Valores nulos: {nulos}")
@@ -28,7 +26,7 @@ def leer_excel(ruta):
     except Exception as e:
         return f"Error leyendo Excel: {e}"
 
-def leer_csv(ruta):
+def leer_csv(ruta: str) -> str:
     """Lee un CSV y retorna resumen"""
     ruta = os.path.expanduser(ruta)
     try:
@@ -46,7 +44,7 @@ def leer_csv(ruta):
     except Exception as e:
         return f"Error leyendo CSV: {e}"
 
-def leer_pdf(ruta):
+def leer_pdf(ruta: str) -> str:
     """Extrae texto de un PDF"""
     ruta = os.path.expanduser(ruta)
     try:
@@ -63,8 +61,8 @@ def leer_pdf(ruta):
     except Exception as e:
         return f"Error leyendo PDF: {e}"
 
-def comparar_excel(ruta1, ruta2, columna_clave=None):
-    """Compara dos archivos Excel y detecta diferencias"""
+def comparar_excel(ruta1: str, ruta2: str, columna_clave: str = None) -> str:
+    """Compara dos archivos Excel"""
     try:
         df1 = pd.read_excel(os.path.expanduser(ruta1))
         df2 = pd.read_excel(os.path.expanduser(ruta2))

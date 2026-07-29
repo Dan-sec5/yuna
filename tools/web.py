@@ -2,7 +2,7 @@ import yfinance as yf
 from ddgs import DDGS
 from datetime import datetime
 
-def buscar_web(query, max_resultados=3):
+def buscar_web(query: str, max_resultados: int = 3) -> str:
     """Busca en DuckDuckGo sin API key"""
     try:
         with DDGS() as ddgs:
@@ -15,7 +15,7 @@ def buscar_web(query, max_resultados=3):
     except Exception as e:
         return f"Error en búsqueda: {e}"
 
-def precio_activo(ticker):
+def precio_activo(ticker: str) -> str:
     """Obtiene precio actual de un activo financiero"""
     try:
         activo = yf.Ticker(ticker)
@@ -30,7 +30,6 @@ def precio_activo(ticker):
         precio_actual = precios.iloc[-1]
         precio_anterior = precios.iloc[-2] if len(precios) > 1 else None
 
-        # Detectar si mercado está cerrado
         hoy = datetime.now()
         es_fin_semana = hoy.weekday() >= 5
         nota = " (mercado cerrado — fin de semana)" if es_fin_semana else ""
@@ -50,6 +49,6 @@ def precio_activo(ticker):
     except Exception as e:
         return f"Error obteniendo precio de {ticker}: {e}"
 
-def noticias_financieras_mx(max_resultados=3):
+def noticias_financieras_mx(max_resultados: int = 3) -> str:
     """Busca noticias financieras relevantes para México"""
     return buscar_web("fideicomisos Mexico finanzas noticias hoy", max_resultados)
