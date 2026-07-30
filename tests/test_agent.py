@@ -1,17 +1,22 @@
 import sys
+import os
 sys.path.insert(0, os.path.expanduser("~/yuna"))
-
 import pytest
-from core.agent import YunaAgent
-from core.llm import chat_with_tools
 
-class TestAgent:
-    def test_agent_creation(self):
-        agent = YunaAgent()
-        assert agent is not None
-    
-    def test_agent_simple(self):
-        agent = YunaAgent()
-        # Test sin tools (solo conversación)
-        # Esto requiere Ollama corriendo
-        pass
+def test_agent_importa():
+    from core.agent import YunaAgent
+    agente = YunaAgent()
+    assert agente is not None
+
+def test_agent_reset():
+    from core.agent import YunaAgent
+    agente = YunaAgent()
+    agente.reset()
+    assert agente is not None
+
+def test_agent_process_simple():
+    from core.agent import YunaAgent
+    agente = YunaAgent()
+    respuesta = agente.process("hola")
+    assert isinstance(respuesta, str)
+    assert len(respuesta) > 0

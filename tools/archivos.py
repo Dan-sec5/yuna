@@ -13,6 +13,8 @@ def listar_recientes(carpeta: str = "~/Downloads", dias: int = 7) -> list:
     """Lista archivos modificados en los últimos N días"""
     carpeta = os.path.expanduser(carpeta)
     dias = int(dias)
+    if not os.path.exists(carpeta):
+        return []
     limite = datetime.now() - timedelta(days=dias)
     archivos = []
     for f in os.listdir(carpeta):

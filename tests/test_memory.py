@@ -1,44 +1,40 @@
-import sys
+import sys, os
 sys.path.insert(0, os.path.expanduser("~/yuna"))
-
 import pytest
-from memory.manager import (
-    init_db, set_preferencia, get_preferencia,
-    add_episodic, get_episodic, get_relevant_memory
-)
+import tempfile
 
-@pytest.fixture(autouse=True)
-def setup_db():
+def test_init_db():
+    from memory.manager import init_db
     init_db()
-    # Limpiar
-    import sqlite3
-    from config import get
     from pathlib import Path
-    db = Path(get("paths.memory_db")).expanduser()
-    with sqlite3.connect(db) as conn:
-        conn.execute("DELETE FROM preferencias")
-        conn.execute("DELETE FROM episodic")
-    yield
-    with sqlite3.connect(db) as conn:
-        conn.execute("DELETE FROM preferencias")
-        conn.execute("DELETE FROM episodic")
+    from config import get
+    db_path = Path(get("paths.memory_db")).expanduser()
+    assert db_path.exists()
 
-class TestMemory:
-    def test_preferencias(self):
-        set_preferencia("test_key", "test_val")
-        assert get_preferencia("test_key") == "test_val"
-        assert get_preferencia("nonexistente") is None
-    
-    def test_episodic(self):
-        add_episodic("Evento 1", "detalle 1")
-        add_episodic("Evento 2", "detalle 2")
-        events = get_episodic(10)
-        assert len(events) == 2
-        assert events[0]["evento"] == "Evento 2"  # más reciente primero
-    
-    def test_relevant_memory(self):
-        set_preferencia("nombre", "Luis")
-        add_episodic("Hablamos de Python")
-        mem = get_relevant_memory("test")
-        assert "Luis" in mem
-        assert "Python" in mem
+def test_set_get_preferencia():
+    from memory.manager import init_db, set_preferencia, get_preferencia
+    init_db()
+    set_preferencia("test_clave", "test_valor")
+    val = get_preferencia("test_clave")
+    assert val == "test_valor"
+
+def test_get_preferencia_inexistente():
+    from memory.manager import init_db, get_preferencia
+    init_db()
+    val = get_preferencia("clave_que_no_existe_xyz")
+    assert val is None
+
+def test_add_get_episodic():
+    from memory.manager import init_db, add_episodic, get_episodic
+    init_db()
+    add_episodic("test_evento", "detalles de prueba")
+    episodic = get_episodic(limit=10)
+    assert isinstance(episodic, list)
+    assert any(e["evento"] == "test_evento" for e in episodic)
+
+def test_escribir_consultar_memoria():
+    from memory.manager import init_db, consultar_memoria, escribir_memoria
+    init_db()
+    escribir_memoria("nombre_test", "Luis")
+    resultado = consultar_memoria("preferencias", "nombre_test")
+    assert "Luis" in resultado

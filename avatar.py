@@ -72,21 +72,21 @@ def abrir_terminal(comando):
 btn_hablar = ctk.CTkButton(
     app, text="💬  Hablar", width=ancho,
     fg_color="#534AB7", hover_color="#3d368a",
-    command=lambda: abrir_terminal("yuna-chat")
+    command=lambda: abrir_terminal("python3 ~/yuna/app.py chat")
 )
 btn_hablar.pack(pady=3)
 
 btn_ejecutar = ctk.CTkButton(
     app, text="⚡  Ejecutar tarea", width=ancho,
     fg_color="#185FA5", hover_color="#0f4578",
-    command=lambda: abrir_terminal("yuna-ejecutar")
+    command=lambda: abrir_terminal("python3 ~/yuna/ejecutar.py")
 )
 btn_ejecutar.pack(pady=3)
 
 btn_aprender = ctk.CTkButton(
     app, text="🧠  Aprender", width=ancho,
     fg_color="#0F6E56", hover_color="#094d3c",
-    command=lambda: abrir_terminal("yuna-aprender")
+    command=lambda: abrir_terminal("python3 ~/yuna/aprender.py")
 )
 btn_aprender.pack(pady=3)
 
@@ -125,7 +125,7 @@ end tell
 btn_agente = ctk.CTkButton(
     app, text="🤖  Modo Agente", width=ancho,
     fg_color="#7C3AED", hover_color="#5B21B6",
-    command=lambda: abrir_terminal("yuna-agente")
+    command=lambda: abrir_terminal("python3 ~/yuna/app.py agent")
 )
 btn_agente.pack(pady=3)
 

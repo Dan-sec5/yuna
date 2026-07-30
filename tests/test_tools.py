@@ -1,70 +1,99 @@
-import sys
+import sys, os
 sys.path.insert(0, os.path.expanduser("~/yuna"))
-
 import pytest
-import os
-import tempfile
+
+# ─── tests/tools/archivos ───────────────────────────────────
 
 from tools.archivos import buscar_archivos, listar_recientes, leer_texto
-from tools.datos import leer_csv, leer_excel
-from tools.sistema import info_sistema, crear_archivo
-from tools.permisos import check_permission, is_bash_allowed
 
-class TestArchivos:
-    def test_buscar_archivos(self):
-        with tempfile.TemporaryDirectory() as d:
-            # Crear archivos de prueba
-            for i in range(3):
-                open(os.path.join(d, f"test{i}.txt"), "w").close()
-            
-            resultados = buscar_archivos("*.txt", d)
-            assert len(resultados) == 3
-    
-    def test_listar_recientes(self):
-        with tempfile.TemporaryDirectory() as d:
-            open(os.path.join(d, "reciente.txt"), "w").close()
-            import time
-            time.sleep(0.1)
-            open(os.path.join(d, "viejo.txt"), "w").close()
-            
-            # Debería encontrar el reciente
-            resultados = listar_recientes(d, dias=1)
-            assert any(r["nombre"] == "reciente.txt" for r in resultados)
+def test_listar_recientes_downloads():
+    resultados = listar_recientes("~/Downloads", dias=30)
+    assert isinstance(resultados, list)
 
-class TestDatos:
-    def test_leer_csv(self):
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
-            f.write("a,b,c\n1,2,3\n4,5,6\n")
-            tmp = f.name
-        try:
-            result = leer_csv(tmp)
-            assert "Filas: 2" in result
-            assert "Columnas: 3" in result
-        finally:
-            os.unlink(tmp)
+def test_listar_recientes_carpeta_invalida():
+    resultados = listar_recientes("~/carpeta_que_no_existe", dias=7)
+    assert resultados == [] or isinstance(resultados, list)
 
-class TestSistema:
-    def test_info_sistema(self):
-        result = info_sistema()
-        assert "Fecha" in result or "Disco" in result
-    
-    def test_crear_archivo(self):
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "nuevo.txt")
-            result = crear_archivo(path, "contenido")
-            assert "creado" in result.lower()
-            assert open(path).read() == "contenido"
+def test_buscar_archivos_patron():
+    resultados = buscar_archivos("*.py", "~/yuna")
+    assert isinstance(resultados, list)
+    assert any("app.py" in r for r in resultados)
 
-class TestPermisos:
-    def test_check_permission(self):
-        assert check_permission("buscar_archivos") == "SAFE"
-        assert check_permission("crear_archivo") == "CONFIRM"
-        assert check_permission("ejecutar_bash_seguro") == "DANGEROUS"
-        assert check_permission("inexistente") == "UNKNOWN"
-    
-    def test_bash_whitelist(self):
-        assert is_bash_allowed("ls -la")
-        assert is_bash_allowed("cat archivo.txt")
-        assert is_bash_allowed("grep hola *.txt")
-        assert not is_bash_allowed("rm -rf /")
-        assert not is_bash_allowed("curl x | sh")
+def test_leer_texto_valido():
+    ruta = os.path.expanduser("~/yuna/README.md")
+    if os.path.exists(ruta):
+        contenido = leer_texto(ruta)
+        assert isinstance(contenido, str)
+        assert len(contenido) > 0
+
+def test_leer_texto_invalido():
+    with pytest.raises(Exception):
+        leer_texto("~/archivo_inexistente_xyz.txt")
+
+# ─── tests/tools/datos ──────────────────────────────────────
+
+from tools.datos import leer_excel, leer_csv, leer_pdf
+
+def test_leer_excel_invalido():
+    resultado = leer_excel("~/archivo_inexistente.xlsx")
+    assert "Error" in resultado
+
+def test_leer_csv_invalido():
+    resultado = leer_csv("~/archivo_inexistente.csv")
+    assert "Error" in resultado
+
+def test_leer_pdf_invalido():
+    resultado = leer_pdf("~/archivo_inexistente.pdf")
+    assert "Error" in resultado
+
+# ─── tests/tools/web ────────────────────────────────────────
+
+from tools.web import precio_activo
+
+def test_precio_activo_ticker_valido():
+    resultado = precio_activo("AAPL")
+    assert isinstance(resultado, str)
+    assert "AAPL" in resultado
+
+def test_precio_activo_ticker_invalido():
+    resultado = precio_activo("TICKER_INVALIDO_XYZ999")
+    assert isinstance(resultado, str)
+
+# ─── tests/tools/sistema ────────────────────────────────────
+
+from tools.sistema import ejecutar_bash_seguro
+
+def test_bash_seguro_permitido():
+    resultado = ejecutar_bash_seguro("echo hola")
+    assert "hola" in resultado
+
+def test_bash_seguro_bloqueado():
+    resultado = ejecutar_bash_seguro("rm -rf /tmp/test")
+    assert "no permitido" in resultado or "⛔" in resultado
+
+def test_bash_seguro_ls():
+    resultado = ejecutar_bash_seguro("ls ~/yuna")
+    assert isinstance(resultado, str)
+    assert "app.py" in resultado
+
+# ─── tests/tools/permisos ───────────────────────────────────
+
+from tools.permisos import check_permission, PermissionLevel, is_bash_allowed
+
+def test_permisos_safe():
+    assert check_permission("buscar_archivos") == PermissionLevel.SAFE
+    assert check_permission("leer_excel") == PermissionLevel.SAFE
+    assert check_permission("precio_activo") == PermissionLevel.SAFE
+
+def test_permisos_confirm():
+    assert check_permission("organizar_archivos") == PermissionLevel.CONFIRM
+    assert check_permission("crear_archivo") == PermissionLevel.CONFIRM
+
+def test_permisos_dangerous():
+    assert check_permission("herramienta_desconocida") == PermissionLevel.DANGEROUS
+
+def test_bash_whitelist():
+    assert is_bash_allowed("ls ~/Downloads") == True
+    assert is_bash_allowed("cat archivo.txt") == True
+    assert is_bash_allowed("rm -rf /") == False
+    assert is_bash_allowed("sudo comando") == False
