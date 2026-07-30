@@ -1,13 +1,14 @@
 {
   "models": {
     "chat": "llama3.2:3b",
-    "agent": "qwen2.5:7b",
+    "agent": "qwen3:4b",
     "fast": "llama3.2:3b"
   },
   "ollama": {
     "host": "http://localhost:11434",
     "timeout": 60,
-    "stream": false
+    "stream": false,
+    "keep_alive": "30m"
   },
   "paths": {
     "memory_db": "~/yuna/data/yuna.db",
@@ -28,6 +29,8 @@
     "max_iterations": 5,
     "temperature_plan": 0.2,
     "temperature_execute": 0.4,
-    "context_window": 2048
+    "context_window": 2048,
+    "parallel_tools": true,
+    "tool_cache_ttl": 300
   }
 }
