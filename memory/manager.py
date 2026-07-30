@@ -83,6 +83,7 @@ def get_tarea_actual(tarea_id: str) -> Optional[Dict]:
 
 def migrar_memoria_txt():
     """Migración única desde memoria.txt a SQLite"""
+    init_db()  # Asegurar tablas antes de escribir
     txt_path = Path(get("paths.memory_txt_legacy", "~/yuna/memoria.txt")).expanduser()
     if not txt_path.exists():
         return

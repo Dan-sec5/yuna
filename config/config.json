@@ -1,19 +1,18 @@
 {
   "models": {
-    "chat": "qwen3:8b",
-    "agent": "qwen3:8b",
-    "fast": "gemma2b",
-    "vision": "gemma-vision-1"
+    "chat": "llama3.2:3b",
+    "agent": "qwen2.5:7b",
+    "fast": "llama3.2:3b"
   },
   "ollama": {
     "host": "http://localhost:11434",
     "timeout": 60,
-    "stream": true
+    "stream": false
   },
   "paths": {
-    "memory_db": "data/yuna.db",
-    "logs": "logs/",
-    "data_folder": "data/",
+    "memory_db": "~/yuna/data/yuna.db",
+    "logs": "~/yuna/logs/",
+    "data_folder": "~/yuna/data/",
     "memory_txt_legacy": "~/yuna/memoria.txt"
   },
   "permissions": {

@@ -1,41 +1,39 @@
-SAFE = {
-    "buscar_archivos", "listar_recientes", "leer_excel", "leer_csv", "leer_pdf",
-    "leer_texto", "buscar_web", "precio_activo", "noticias_financieras_mx",
-    "info_sistema", "notificar", "consultar_memoria"
+from enum import Enum
+
+class PermissionLevel(Enum):
+    SAFE = "safe"
+    CONFIRM = "confirm"
+    DANGEROUS = "dangerous"
+
+# Clasificación de herramientas por nivel de riesgo
+_PERMISSIONS = {
+    "buscar_archivos":        PermissionLevel.SAFE,
+    "listar_recientes":       PermissionLevel.SAFE,
+    "leer_texto":             PermissionLevel.SAFE,
+    "leer_excel":             PermissionLevel.SAFE,
+    "leer_csv":               PermissionLevel.SAFE,
+    "leer_pdf":               PermissionLevel.SAFE,
+    "buscar_web":             PermissionLevel.SAFE,
+    "precio_activo":          PermissionLevel.SAFE,
+    "noticias_financieras_mx":PermissionLevel.SAFE,
+    "info_sistema":           PermissionLevel.SAFE,
+    "consultar_memoria":      PermissionLevel.SAFE,
+    "escribir_memoria":       PermissionLevel.SAFE,
+    "notificar":              PermissionLevel.SAFE,
+    "organizar_archivos":     PermissionLevel.CONFIRM,
+    "crear_archivo":          PermissionLevel.CONFIRM,
+    "ejecutar_bash_seguro":   PermissionLevel.CONFIRM,
 }
 
-CONFIRM = {
-    "organizar_archivos", "crear_archivo", "escribir_memoria"
-}
+_BASH_WHITELIST = {"ls", "cat", "echo", "pwd", "head", "tail", "grep", "find", "wc", "date", "du", "df"}
 
-DANGEROUS = {
-    "ejecutar_bash_seguro"
-}
+def check_permission(tool_name: str) -> PermissionLevel:
+    return _PERMISSIONS.get(tool_name, PermissionLevel.DANGEROUS)
 
-BASH_WHITELIST = {
-    "ls", "cat", "echo", "pwd", "head", "tail", "grep", "find", "wc", "df", "du", "ps"
-}
+def is_bash_allowed(comando: str) -> bool:
+    cmd = comando.strip().split()[0] if comando.strip() else ""
+    return cmd in _BASH_WHITELIST
 
-def check_permission(tool_name: str) -> str:
-    if tool_name in SAFE:
-        return "SAFE"
-    if tool_name in CONFIRM:
-        return "CONFIRM"
-    if tool_name in DANGEROUS:
-        return "DANGEROUS"
-    return "UNKNOWN"
-
-def is_bash_allowed(command: str) -> bool:
-    import shlex
-    try:
-        parts = shlex.split(command)
-        return parts[0] in BASH_WHITELIST
-    except:
-        return False
-
-def confirm_user(prompt: str) -> bool:
-    from config import get
-    if not get("permissions.confirmations", True):
-        return True
-    resp = input(f"{prompt} (s/n) → ").strip().lower()
-    return resp in ("s", "si", "sí", "y", "yes")
+def confirm_user(tool_name: str, args: dict) -> bool:
+    print(f"\n⚠ Confirmación: {tool_name}({args})")
+    return input("¿Ejecutar? (s/n) → ").strip().lower() == "s"

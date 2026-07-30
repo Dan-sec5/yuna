@@ -2,22 +2,23 @@ import json
 import os
 from pathlib import Path
 
-CONFIG_PATH = Path(__file__).parent / "config.json"
+_CONFIG_PATH = Path(__file__).parent / "config.json"
 
-def load_config():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+def _load():
+    with open(_CONFIG_PATH, "r") as f:
         return json.load(f)
 
-CONFIG = load_config()
+CONFIG = _load()
 
-def get(key, default=None):
-    keys = key.split(".")
-    value = CONFIG
+def get(dotted_key: str, default=None):
+    """Acceso a config por clave dotted: get('models.agent')"""
+    keys = dotted_key.split(".")
+    val = CONFIG
     for k in keys:
-        if isinstance(value, dict):
-            value = value.get(k)
+        if isinstance(val, dict):
+            val = val.get(k)
         else:
             return default
-        if value is None:
+        if val is None:
             return default
-    return value
+    return val
