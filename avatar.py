@@ -92,20 +92,21 @@ btn_aprender.pack(pady=3)
 
 def cerrar_yuna():
     # Cerrar terminales abiertas por Yuna
+    os.system("""osascript -e '
     tell application "Terminal"
-    set windowList to every window
-    repeat with w in windowList
-        set tabList to every tab of w
-        repeat with t in tabList
-            set cmd to custom title of t
-            if cmd contains "yuna" then
-                close t  -- ← Cierra el TAB, no la ventana
-            end if
+        set windowList to every window
+        repeat with w in windowList
+            set tabList to every tab of w
+            repeat with t in tabList
+                set cmd to custom title of t
+                if cmd contains "yuna" then
+                    close t
+                end if
+            end repeat
         end repeat
-    end repeat
-end tell
+    end tell'""")
 
-    # Guardar sesión de bitácora en historial
+    
     bitacora = os.path.expanduser("~/yuna/bitacora.txt")
     historial_dir = os.path.expanduser("~/yuna/historial/")
     os.makedirs(historial_dir, exist_ok=True)
