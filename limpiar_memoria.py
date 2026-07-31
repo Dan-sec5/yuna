@@ -36,7 +36,7 @@ APRENDIZAJES:
 {chr(10).join(aprendidas)}"""
 
 resultado = ollama.chat(
-    model='llama3.2:3b',
+    model='qwen3:4b',
     messages=[{"role": "user", "content": prompt}],
     options={"num_predict": 300, "temperature": 0.3, "num_ctx": 2048}
 )

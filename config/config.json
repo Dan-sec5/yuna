@@ -1,12 +1,12 @@
 {
   "models": {
-    "chat": "llama3.2:3b",
     "agent": "qwen3:4b",
-    "fast": "llama3.2:3b"
+    "chat": "qwen3:4b",
+    "fast": "qwen3:4b"
   },
   "ollama": {
     "host": "http://localhost:11434",
-    "timeout": 60,
+    "timeout": 120,
     "stream": false,
     "keep_alive": "30m"
   },

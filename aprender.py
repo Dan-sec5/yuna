@@ -24,7 +24,7 @@ Bitácora:
 Responde en español, de forma concisa y estructurada."""
 
 resultado = ollama.chat(
-    model='llama3.2:3b',
+    model='qwen3:4b',
     messages=[{"role": "user", "content": prompt}],
     options={"num_predict": 400, "temperature": 0.3, "num_ctx": 2048}
 )

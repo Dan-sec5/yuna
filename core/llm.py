@@ -1,38 +1,62 @@
 """
-core/llm.py — Wrapper Ollama optimizado para baja latencia
-Cambios: streaming, keep-alive, batch processing, carga asíncrona
+core/llm.py — Wrapper Ollama con think=False para Qwen3
+Documentación: https://docs.ollama.com/capabilities/thinking
 """
 import ollama
 import logging
-from typing import List, Dict, Any, Optional, Iterator
+from typing import List, Dict, Any, Optional
 from config import CONFIG
 
 logger = logging.getLogger(__name__)
 
 MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:4b")
-MODEL_CHAT = CONFIG["models"].get("chat", "llama3.2:3b")
+MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:4b")
 OLLAMA_HOST = CONFIG["ollama"].get("host", "http://localhost:11434")
-KEEP_ALIVE = CONFIG["ollama"].get("keep_alive", "30m")  # Mantener modelo en RAM
+KEEP_ALIVE = CONFIG["ollama"].get("keep_alive", "30m")
 
 client = ollama.Client(host=OLLAMA_HOST)
 
-# ─── Keep-alive: precargar modelo al iniciar ─────────────────
+
+def _is_thinking_model(model: str) -> bool:
+    """Detecta si el modelo tiene modo thinking nativo."""
+    thinking_models = ["qwen3", "deepseek-r1", "deepseek-v3", "gemma4", "gpt-oss"]
+    return any(tm in model.lower() for tm in thinking_models)
+
+
+def _get_options(model: str, extra_options: dict) -> dict:
+    """Construye opciones de Ollama, desactivando thinking si aplica."""
+    opts = {
+        "num_predict": 400,
+        "temperature": 0.2,
+        "num_ctx": 4096,
+        "keep_alive": KEEP_ALIVE,
+    }
+    opts.update(extra_options)
+
+    # CRÍTICO: Desactivar thinking para modelos que lo soportan
+    # Esto reduce la latencia de 30s a ~2s en Qwen3
+    if _is_thinking_model(model):
+        opts["think"] = False  # ← FIX DEFINITIVO
+        logger.debug(f"Thinking desactivado para {model}")
+
+    return opts
+
+
 def preload_model(model: str = None):
     """Precarga el modelo en RAM para evitar latencia de carga."""
     model = model or MODEL_AGENT
     try:
-        # Petición mínima para cargar el modelo en memoria
         client.chat(
             model=model,
             messages=[{"role": "user", "content": "hi"}],
-            options={"num_predict": 1},
-            keep_alive=KEEP_ALIVE
+            options={"num_predict": 1, "keep_alive": KEEP_ALIVE},
+            think=False if _is_thinking_model(model) else None,
         )
         logger.info(f"Modelo {model} precargado en RAM")
     except Exception as e:
         logger.warning(f"No se pudo precargar {model}: {e}")
 
-# ─── Chat con tools — SIN streaming (tool calling requiere respuesta completa) ───
+
 def chat_with_tools(
     messages: List[Dict],
     tools: List[Dict],
@@ -40,21 +64,20 @@ def chat_with_tools(
     **options
 ) -> Any:
     model = model or MODEL_AGENT
-    default_opts = {
-        "num_predict": 400,
-        "temperature": 0.2,
-        "num_ctx": 4096,
-        "keep_alive": KEEP_ALIVE,
+    opts = _get_options(model, options)
+
+    # Parámetro think va al nivel superior, no en options
+    kwargs = {
+        "model": model,
+        "messages": messages,
+        "tools": tools,
+        "options": opts,
     }
-    default_opts.update(options)
+    if _is_thinking_model(model):
+        kwargs["think"] = False
 
     try:
-        return client.chat(
-            model=model,
-            messages=messages,
-            tools=tools,
-            options=default_opts
-        )
+        return client.chat(**kwargs)
     except ollama.ResponseError as e:
         logger.error(f"Ollama error: {e}")
         return None
@@ -62,60 +85,29 @@ def chat_with_tools(
         logger.error(f"Error inesperado: {e}")
         return None
 
-# ─── Chat simple — CON streaming para respuesta inmediata ────
-def chat_simple_stream(
-    messages: List[Dict],
-    model: str = None,
-    **options
-) -> Iterator[str]:
-    """
-    Streaming para chat.py — el usuario ve texto aparecer token por token
-    en lugar de esperar la respuesta completa.
-    """
-    model = model or MODEL_CHAT
-    default_opts = {
-        "num_predict": 600,
-        "temperature": 0.7,
-        "num_ctx": 4096,
-        "keep_alive": KEEP_ALIVE,
-    }
-    default_opts.update(options)
 
-    try:
-        stream = client.chat(
-            model=model,
-            messages=messages,
-            stream=True,
-            options=default_opts
-        )
-        for chunk in stream:
-            content = chunk.get("message", {}).get("content", "")
-            if content:
-                yield content
-    except Exception as e:
-        logger.error(f"Error en streaming: {e}")
-        yield f"⚠️ Error: {e}"
-
-# ─── Chat simple tradicional (sin streaming) ────────────────
 def chat_simple(
     messages: List[Dict],
     model: str = None,
     **options
 ) -> Any:
     model = model or MODEL_CHAT
-    default_opts = {
-        "num_predict": 600,
-        "temperature": 0.7,
-        "num_ctx": 4096,
-        "keep_alive": KEEP_ALIVE,
+    opts = _get_options(model, options)
+
+    kwargs = {
+        "model": model,
+        "messages": messages,
+        "options": opts,
     }
-    default_opts.update(options)
+    if _is_thinking_model(model):
+        kwargs["think"] = False
 
     try:
-        return client.chat(model=model, messages=messages, options=default_opts)
+        return client.chat(**kwargs)
     except Exception as e:
         logger.error(f"Error en chat simple: {e}")
         return None
+
 
 def clean_response(response: Any) -> str:
     import re
@@ -133,6 +125,7 @@ def clean_response(response: Any) -> str:
     if "...done thinking." in content:
         content = content.split("...done thinking.")[-1]
     return content.strip()
+
 
 def get_tool_calls(response: Any) -> List[Dict]:
     if response is None:

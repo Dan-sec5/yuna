@@ -119,7 +119,7 @@ def cerrar_yuna():
         open(bitacora, "w").close()
 
     # Detener modelo para liberar RAM
-    subprocess.run(["ollama", "stop", "llama3.2:3b"], capture_output=True)
+    subprocess.run(["ollama", "stop", "qwen3:4b"], capture_output=True)
 
     app.destroy()
 
