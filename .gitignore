@@ -1,37 +1,17 @@
-# Datos personales
-memoria.txt
-bitacora.txt
-historial/
-avatar.png
-avatar.gif
-
-# Python
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
 *.save
-.venv/
-*.egg-info/
-
-# Mac
 .DS_Store
-.AppleDouble
-
-# Backups
-.backup_*/
-
-# Archivos legacy
-iniciar.sh
-organizar_imagenes.sh
-ejecutar.py.save
-vts_token.txt
-config.json
-
-# Base de datos y logs
+.venv/
+bitacora.txt
+historial/
+memoria.txt
+avatar.png
+avatar.gif
 data/*.db
 logs/*.log
-*.db
-
-# Variables de entorno
 .env
+.backup_*/
+*.bak
+*.bak
