@@ -4,10 +4,11 @@ Documentación: https://docs.ollama.com/capabilities/thinking
 """
 import ollama
 import logging
+from core.logger import get_logger
 from typing import List, Dict, Any, Optional
 from config import CONFIG
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:4b")
 MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:4b")

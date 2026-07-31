@@ -46,6 +46,14 @@ Uso:
         import pytest
         pytest.main(["-v", "tests/"])
     
+    elif cmd == "logs":
+        import subprocess
+        log_file = os.path.expanduser("~/yuna/logs/yuna.log")
+        if os.path.exists(log_file):
+            subprocess.run(["tail", "-50", log_file])
+        else:
+            print("No hay logs aún. Usa yuna-agente primero.")
+
     else:
         print(f"Comando desconocido: {cmd}")
 

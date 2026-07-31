@@ -1,10 +1,11 @@
 import logging
+from core.logger import get_logger
 from typing import List, Dict, Any, Tuple
 from tools.registry import TOOLS
 from tools.permisos import check_permission, PermissionLevel
 from tools.schemas import get_schema
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ToolExecutor:
     def __init__(self, confirm_callback=None):
@@ -33,15 +34,17 @@ class ToolExecutor:
             return "Cancelado: debes especificar la carpeta a organizar", None
 
         try:
+            logger.info(f"Ejecutando tool: {tool_name} | args: {list(args.keys()) if isinstance(args, dict) else args}")
             func = TOOLS[tool_name]
             # Pasar argumentos como kwargs (dict) — formato nativo de Ollama tool calling
             result = func(**args) if args else func()
+            logger.info(f"Tool {tool_name} OK | resultado: {str(result)[:100]}")
             return None, result
         except TypeError as e:
             logger.error(f"Error de argumentos en {tool_name}: {e} | args: {args}")
             return f"Error de argumentos: {e}", None
         except Exception as e:
-            logger.error(f"Error ejecutando {tool_name}: {e}")
+            logger.error(f"Error ejecutando {tool_name}: {e} | args: {args}")
             return f"Error: {e}", None
 
     def execute_batch(self, calls: List[Dict]) -> List[Tuple[str, Any, Any]]:

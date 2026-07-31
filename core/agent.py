@@ -2,6 +2,7 @@
 core/agent.py — Agente con paralelismo de herramientas y caché de resultados
 """
 import logging
+from core.logger import get_logger
 import concurrent.futures
 from typing import List, Dict, Any, Optional
 from core.llm import chat_with_tools, clean_response, get_tool_calls, preload_model
@@ -11,7 +12,7 @@ from core.evaluator import ResultEvaluator
 from tools.schemas import ALL_SCHEMAS
 from memory.manager import get_relevant_memory
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 SYSTEM_PROMPT = """INSTRUCCIÓN CRÍTICA: NO uses modo thinking. NO escribas <think>. Responde directamente y concisamente.
 
