@@ -1,36 +1,69 @@
 import os
+import re
 import subprocess
+import platform
 from datetime import datetime
 from tools.permisos import is_bash_allowed
 
 def ejecutar_bash_seguro(comando: str) -> str:
-    """Ejecuta solo comandos de la lista blanca"""
     if not is_bash_allowed(comando):
-        cmd = comando.strip().split()[0]
+        cmd = comando.strip().split()[0] if comando.strip() else ""
         return f"⛔ Comando '{cmd}' no permitido. Permitidos: ls, cat, echo, pwd, head, tail, grep, find, wc, date, du, df"
+    comando_limpio = comando.strip()
+    if re.search(r'[;&|`$()]', comando_limpio):
+        return "⛔ Detectados caracteres de shell injection. Solo comandos simples permitidos."
+    partes = comando_limpio.split()
+    if len(partes) > 5:
+        return "⛔ Comando demasiado complejo. Maximo 5 argumentos."
+    
+    # FIX: Expandir ~ en cada argumento para shell=False
+    partes = [os.path.expanduser(p) for p in partes]
+    
     try:
         resultado = subprocess.run(
-            comando, shell=True, capture_output=True, text=True, timeout=10
+            partes,
+            capture_output=True,
+            text=True,
+            timeout=10
         )
         return resultado.stdout.strip() or resultado.stderr.strip() or "✓ Sin salida"
     except subprocess.TimeoutExpired:
-        return "⏱ Timeout: el comando tardó demasiado"
+        return "⏱ Timeout: el comando tardo demasiado"
     except Exception as e:
         return f"Error: {e}"
 
 def notificar(titulo: str, mensaje: str) -> str:
-    script = f'display notification "{mensaje}" with title "{titulo}"'
-    os.system(f"osascript -e '{script}'")
-    return f"✓ Notificación enviada: {titulo}"
+    sistema = platform.system()
+    try:
+        if sistema == "Darwin":
+            script = f'display notification "{mensaje}" with title "{titulo}"'
+            os.system(f"osascript -e '{script}'")
+        elif sistema == "Linux":
+            os.system(f'notify-send "{titulo}" "{mensaje}"')
+        else:
+            return f"Notificacion: {titulo} - {mensaje}"
+        return f"✓ Notificacion enviada: {titulo}"
+    except Exception as e:
+        return f"⚠ Error notificando: {e}"
 
 def crear_archivo(ruta: str, contenido: str) -> str:
     ruta = os.path.expanduser(ruta)
-    os.makedirs(os.path.dirname(ruta) if os.path.dirname(ruta) else ".", exist_ok=True)
-    with open(ruta, "w", encoding="utf-8") as f:
+    ruta_abs = os.path.abspath(ruta)
+    home_abs = os.path.abspath(os.path.expanduser("~"))
+    if not (ruta_abs.startswith(home_abs) or ruta_abs.startswith("/tmp")):
+        return f"⛔ Ruta no permitida: {ruta}. Solo dentro de ~/ o /tmp/"
+    if os.path.exists(ruta_abs):
+        backup = ruta_abs + ".bak"
+        os.rename(ruta_abs, backup)
+    os.makedirs(os.path.dirname(ruta_abs) if os.path.dirname(ruta_abs) else ".", exist_ok=True)
+    with open(ruta_abs, "w", encoding="utf-8") as f:
         f.write(contenido)
     return f"✓ Archivo creado: {ruta}"
 
 def info_sistema() -> str:
-    disco = subprocess.run("df -h ~", shell=True, capture_output=True, text=True).stdout.strip()
-    fecha = datetime.now().strftime("%A %d de %B, %Y — %H:%M")
-    return f"📅 {fecha}\n💾 Disco:\n{disco}"
+    try:
+        disco = subprocess.run(["df", "-h", os.path.expanduser("~")], capture_output=True, text=True).stdout.strip()
+        fecha = datetime.now().strftime("%A %d de %B, %Y — %H:%M")
+        return f"📅 {fecha}\n💾 Disco:\n{disco}"
+    except Exception as e:
+        return f"Error obteniendo info: {e}"

@@ -1,31 +1,27 @@
 """
 core/llm.py — Wrapper Ollama con think=False para Qwen3
-Documentación: https://docs.ollama.com/capabilities/thinking
 """
 import ollama
 import logging
+import re
 from core.logger import get_logger
 from typing import List, Dict, Any, Optional
 from config import CONFIG
 
 logger = get_logger(__name__)
 
-MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:4b")
-MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:4b")
+MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:8b")
+MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:8b")
 OLLAMA_HOST = CONFIG["ollama"].get("host", "http://localhost:11434")
 KEEP_ALIVE = CONFIG["ollama"].get("keep_alive", "30m")
 
 client = ollama.Client(host=OLLAMA_HOST)
 
-
 def _is_thinking_model(model: str) -> bool:
-    """Detecta si el modelo tiene modo thinking nativo."""
     thinking_models = ["qwen3", "deepseek-r1", "deepseek-v3", "gemma4", "gpt-oss"]
     return any(tm in model.lower() for tm in thinking_models)
 
-
 def _get_options(model: str, extra_options: dict) -> dict:
-    """Construye opciones de Ollama, desactivando thinking si aplica."""
     opts = {
         "num_predict": 400,
         "temperature": 0.2,
@@ -33,18 +29,12 @@ def _get_options(model: str, extra_options: dict) -> dict:
         "keep_alive": KEEP_ALIVE,
     }
     opts.update(extra_options)
-
-    # CRÍTICO: Desactivar thinking para modelos que lo soportan
-    # Esto reduce la latencia de 30s a ~2s en Qwen3
     if _is_thinking_model(model):
-        opts["think"] = False  # ← FIX DEFINITIVO
+        opts["think"] = False
         logger.debug(f"Thinking desactivado para {model}")
-
     return opts
 
-
 def preload_model(model: str = None):
-    """Precarga el modelo en RAM para evitar latencia de carga."""
     model = model or MODEL_AGENT
     try:
         client.chat(
@@ -57,7 +47,6 @@ def preload_model(model: str = None):
     except Exception as e:
         logger.warning(f"No se pudo precargar {model}: {e}")
 
-
 def chat_with_tools(
     messages: List[Dict],
     tools: List[Dict],
@@ -66,8 +55,6 @@ def chat_with_tools(
 ) -> Any:
     model = model or MODEL_AGENT
     opts = _get_options(model, options)
-
-    # Parámetro think va al nivel superior, no en options
     kwargs = {
         "model": model,
         "messages": messages,
@@ -76,16 +63,20 @@ def chat_with_tools(
     }
     if _is_thinking_model(model):
         kwargs["think"] = False
-
     try:
-        return client.chat(**kwargs)
+        import socket
+        original_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(opts.get("timeout", 120))
+        try:
+            return client.chat(**kwargs)
+        finally:
+            socket.setdefaulttimeout(original_timeout)
     except ollama.ResponseError as e:
         logger.error(f"Ollama error: {e}")
         return None
     except Exception as e:
         logger.error(f"Error inesperado: {e}")
         return None
-
 
 def chat_simple(
     messages: List[Dict],
@@ -94,7 +85,6 @@ def chat_simple(
 ) -> Any:
     model = model or MODEL_CHAT
     opts = _get_options(model, options)
-
     kwargs = {
         "model": model,
         "messages": messages,
@@ -102,36 +92,37 @@ def chat_simple(
     }
     if _is_thinking_model(model):
         kwargs["think"] = False
-
     try:
-        return client.chat(**kwargs)
+        import socket
+        original_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(opts.get("timeout", 120))
+        try:
+            return client.chat(**kwargs)
+        finally:
+            socket.setdefaulttimeout(original_timeout)
     except Exception as e:
         logger.error(f"Error en chat simple: {e}")
         return None
 
-
 def clean_response(response: Any) -> str:
-    import re
     if response is None:
         return ""
-
     if hasattr(response, "message"):
         content = getattr(response.message, "content", "") or ""
     elif isinstance(response, dict):
         content = response.get("message", {}).get("content", "") or ""
     else:
         content = str(response)
-
-    content = re.sub(r'\<think\>.*?\</think\>', '', content, flags=re.DOTALL)
+    # FIX: Regex correcto para thinking tags
+    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+    content = re.sub(r'^(Okay[,]?|Alright|Sure|Let me|So[,]?|First|Hmm|Well)[,\s]*', '', content, flags=re.IGNORECASE)
     if "...done thinking." in content:
         content = content.split("...done thinking.")[-1]
     return content.strip()
 
-
 def get_tool_calls(response: Any) -> List[Dict]:
     if response is None:
         return []
-
     if hasattr(response, "message"):
         calls = getattr(response.message, "tool_calls", None) or []
         result = []
@@ -144,7 +135,6 @@ def get_tool_calls(response: Any) -> List[Dict]:
             if name:
                 result.append({"name": name, "arguments": arguments})
         return result
-
     if isinstance(response, dict):
         msg = response.get("message", {})
         calls = msg.get("tool_calls") or []
@@ -158,5 +148,4 @@ def get_tool_calls(response: Any) -> List[Dict]:
                     "arguments": func.get("arguments", {})
                 })
         return result
-
     return []

@@ -1,16 +1,17 @@
 import os
 import glob
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
 def buscar_archivos(patron: str = "*", carpeta: str = "~/Downloads") -> list:
-    """Busca archivos por patrón en una carpeta"""
     carpeta = os.path.expanduser(carpeta)
+    if not os.path.exists(carpeta):
+        return []
     resultados = glob.glob(os.path.join(carpeta, patron))
     return sorted(resultados, key=os.path.getmtime, reverse=True)
 
 def listar_recientes(carpeta: str = "~/Downloads", dias: int = 7) -> list:
-    """Lista archivos modificados en los últimos N días"""
     carpeta = os.path.expanduser(carpeta)
     dias = int(dias)
     if not os.path.exists(carpeta):
@@ -20,26 +21,30 @@ def listar_recientes(carpeta: str = "~/Downloads", dias: int = 7) -> list:
     for f in os.listdir(carpeta):
         ruta = os.path.join(carpeta, f)
         if os.path.isfile(ruta):
-            modificado = datetime.fromtimestamp(os.path.getmtime(ruta))
-            if modificado > limite:
-                archivos.append({
-                    "nombre": f,
-                    "ruta": ruta,
-                    "modificado": modificado.strftime("%Y-%m-%d %H:%M"),
-                    "tamaño_kb": round(os.path.getsize(ruta) / 1024, 1)
-                })
+            try:
+                modificado = datetime.fromtimestamp(os.path.getmtime(ruta))
+                if modificado > limite:
+                    archivos.append({
+                        "nombre": f,
+                        "ruta": ruta,
+                        "modificado": modificado.strftime("%Y-%m-%d %H:%M"),
+                        "tamano_kb": round(os.path.getsize(ruta) / 1024, 1)
+                    })
+            except OSError:
+                continue
     return sorted(archivos, key=lambda x: x["modificado"], reverse=True)
 
 def organizar_por_tipo(carpeta_origen: str = "~/Downloads") -> list:
-    """Organiza archivos por extensión en subcarpetas"""
     carpeta = os.path.expanduser(carpeta_origen)
+    if not os.path.exists(carpeta):
+        return ["Error: carpeta no existe"]
     destinos = {
         "PDF": ["pdf"],
         "Excel": ["xlsx", "xls"],
         "Datos": ["csv", "json"],
-        "Imágenes": ["png", "jpg", "jpeg", "gif", "webp"],
+        "Imagenes": ["png", "jpg", "jpeg", "gif", "webp"],
         "Documentos": ["docx", "doc", "txt", "md"],
-        "Código": ["py", "js", "ts", "html", "css", "json"],
+        "Codigo": ["py", "js", "ts", "html", "css", "json"],
     }
     movidos = []
     for archivo in os.listdir(carpeta):
@@ -52,13 +57,24 @@ def organizar_por_tipo(carpeta_origen: str = "~/Downloads") -> list:
                 destino = os.path.join(carpeta, carpeta_destino)
                 os.makedirs(destino, exist_ok=True)
                 nuevo = os.path.join(destino, archivo)
-                os.rename(ruta, nuevo)
-                movidos.append(f"{archivo} → {carpeta_destino}/")
+                if os.path.exists(nuevo):
+                    base, ext = os.path.splitext(archivo)
+                    nuevo = os.path.join(destino, f"{base}_{datetime.now().strftime('%Y%m%d_%H%M%S')}{ext}")
+                try:
+                    shutil.move(ruta, nuevo)
+                    movidos.append(f"{archivo} -> {carpeta_destino}/")
+                except Exception as e:
+                    movidos.append(f"Error moviendo {archivo}: {e}")
                 break
     return movidos
 
 def leer_texto(ruta: str) -> str:
-    """Lee un archivo de texto"""
+    """Lee un archivo de texto. Lanza FileNotFoundError si no existe."""
     ruta = os.path.expanduser(ruta)
+    # FIX: Lanzar excepcion si no existe (compatibilidad con tests)
+    if not os.path.exists(ruta):
+        raise FileNotFoundError(f"Archivo no encontrado: {ruta}")
+    if os.path.getsize(ruta) > 10 * 1024 * 1024:
+        raise ValueError("Archivo demasiado grande (>10MB)")
     with open(ruta, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()
