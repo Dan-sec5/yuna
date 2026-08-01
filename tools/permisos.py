@@ -25,7 +25,7 @@ _PERMISSIONS = {
     "ejecutar_bash_seguro":   PermissionLevel.CONFIRM,
 }
 
-_BASH_WHITELIST = {"ls", "cat", "echo", "pwd", "head", "tail", "grep", "find", "wc", "date", "du", "df"}
+_BASH_WHITELIST = {"ls", "cat", "echo", "pwd", "head", "tail", "grep", "find", "wc", "date", "du", "df", "top", "ps", "lsof", "uname", "uptime", "whoami", "which"}
 
 def check_permission(tool_name: str) -> PermissionLevel:
     return _PERMISSIONS.get(tool_name, PermissionLevel.DANGEROUS)
