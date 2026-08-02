@@ -6,29 +6,53 @@ from datetime import datetime
 from tools.permisos import is_bash_allowed
 
 def ejecutar_bash_seguro(comando: str) -> str:
+    """Ejecuta comandos Bash simples previamente autorizados."""
     if not is_bash_allowed(comando):
         cmd = comando.strip().split()[0] if comando.strip() else ""
-        return f"⛔ Comando '{cmd}' no permitido. Permitidos: ls, cat, echo, pwd, head, tail, grep, find, wc, date, du, df"
+        return (
+            f"⛔ Comando '{cmd}' no permitido. "
+            "Revisa la whitelist y las rutas autorizadas."
+        )
+
     comando_limpio = comando.strip()
-    if re.search(r'[;&|`$()]', comando_limpio):
-        return "⛔ Detectados caracteres de shell injection. Solo comandos simples permitidos."
-    partes = comando_limpio.split()
+
+    if re.search(r"[;&|`$()<>]", comando_limpio):
+        return "⛔ Detectados caracteres de shell injection."
+
+    try:
+        import shlex
+        partes = shlex.split(comando_limpio)
+    except ValueError:
+        return "⛔ Sintaxis de comando invalida."
+
+    if not partes:
+        return "⛔ Comando vacio."
+
     if len(partes) > 5:
         return "⛔ Comando demasiado complejo. Maximo 5 argumentos."
-    
-    # FIX: Expandir ~ en cada argumento para shell=False
+
+    # Resolver ~ de forma independiente para cada argumento.
     partes = [os.path.expanduser(p) for p in partes]
-    
+
     try:
         resultado = subprocess.run(
             partes,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            shell=False,
+            cwd=os.path.expanduser("~/yuna"),
         )
-        return resultado.stdout.strip() or resultado.stderr.strip() or "✓ Sin salida"
+
+        return (
+            resultado.stdout.strip()
+            or resultado.stderr.strip()
+            or "✓ Sin salida"
+        )
+
     except subprocess.TimeoutExpired:
         return "⏱ Timeout: el comando tardo demasiado"
+
     except Exception as e:
         return f"Error: {e}"
 
