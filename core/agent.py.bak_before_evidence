@@ -73,26 +73,27 @@ NO inventes resultados.
 
 SYSTEM_SINTETIZADOR = """Eres Yuna, agente IA personal de Luis.
 
+Responde en español mexicano, de forma directa y concisa.
+
 REGLAS ABSOLUTAS:
 
 1. Los DATOS proporcionados son la única fuente de verdad.
-2. Nunca conviertas una propiedad en otra.
-3. "modificado" significa MODIFICADO.
-4. "creado" significa CREADO.
-5. "descargado" significa DESCARGADO.
-6. Si los datos dicen "modificado", NO digas "descargado".
-7. Si la pregunta solicita un dato que los resultados no contienen,
-   debes decir que no puede determinarse con los datos disponibles.
-8. Nunca infieras que un archivo fue descargado porque está dentro de
-   ~/Downloads.
-9. Nunca inventes archivos, fechas, tamaños, rutas ni cantidades.
-10. No agregues información que no aparezca en los datos.
-11. Responde en español mexicano, directamente y sin razonamiento.
+2. Nunca inventes nombres de archivos, rutas, cantidades, fechas o resultados.
+3. Nunca afirmes que ocurrió algo que no aparece en DATOS.
+4. No conviertas "archivos modificados" en "archivos descargados".
+5. No agregues información que no esté en DATOS.
+6. Si una herramienta produjo un error, informa el error.
+7. Si DATOS está vacío, responde exactamente:
+   "No encontré nada".
+8. Si hay una lista de archivos, conserva todos los archivos recibidos.
+9. No ocultes elementos de la lista para hacer la respuesta más corta.
+10. No uses inglés.
+11. No menciones herramientas, modelos, prompts ni razonamiento interno.
 
-IMPORTANTE:
-Si el usuario pregunta "¿qué archivos descargué?" y los resultados
-solo contienen archivos "modificados", debes decir que no es posible
-determinar cuáles fueron descargados con esos datos.
+La pregunta del usuario sirve para entender qué está preguntando,
+pero NO es una fuente de datos.
+
+DATOS tiene prioridad absoluta sobre cualquier suposición.
 """
 
 
@@ -132,205 +133,6 @@ def _extraer_espanol(texto: str) -> str:
         return ' '.join(resultado[:3])
     return lineas[-1] if lineas else texto
 
-def _respuesta_archivos_determinista(user_input: str, resultados_tools: list):
-    """
-    Genera respuestas deterministas para herramientas de archivos.
-
-    buscar_archivos() devuelve una lista de rutas:
-        ["/ruta/a.pdf", "/ruta/b.pdf"]
-
-    listar_recientes() devuelve una lista de diccionarios:
-        [{"nombre": "...", "ruta": "...", "modificado": "..."}]
-    """
-
-    if not resultados_tools:
-        return None
-
-    pregunta = user_input.lower()
-
-    for item in resultados_tools:
-
-        if not isinstance(item, str):
-            continue
-
-        if not item.startswith(("buscar_archivos:", "listar_recientes:", "detectar_descargas:")):
-            continue
-
-        try:
-            _, datos = item.split(":", 1)
-            datos = datos.strip()
-
-            if not datos or datos == "[]":
-                return "No encontré nada"
-
-            # Primero intentamos JSON, que es el formato oficial
-            # producido por _formatear_resultado_tool().
-            try:
-                archivos = json.loads(datos)
-            except (json.JSONDecodeError, TypeError, ValueError):
-                # Compatibilidad con resultados antiguos.
-                try:
-                    import ast
-                    archivos = ast.literal_eval(datos)
-                except (SyntaxError, ValueError, TypeError):
-                    logger.warning(
-                        "No se pudo interpretar resultado de archivos"
-                    )
-                    return None
-
-            if not isinstance(archivos, list):
-                return None
-
-        except Exception as e:
-            logger.warning(
-                f"No se pudo interpretar resultado de archivos: {e}"
-            )
-            return None
-
-        # =====================================================
-        # BUSCAR ARCHIVOS
-        # =====================================================
-
-        if item.startswith("buscar_archivos:"):
-
-            if not archivos:
-                return "No encontré nada"
-
-            rutas = []
-
-            for archivo_encontrado in archivos:
-
-                # buscar_archivos devuelve rutas directamente
-                if isinstance(archivo_encontrado, str):
-                    rutas.append(archivo_encontrado)
-
-                # Compatibilidad por si en el futuro devuelve dicts
-                elif isinstance(archivo_encontrado, dict):
-                    ruta = (
-                        archivo_encontrado.get("ruta")
-                        or archivo_encontrado.get("nombre")
-                    )
-
-                    if ruta:
-                        rutas.append(str(ruta))
-
-            if not rutas:
-                return "No encontré nada"
-
-            return (
-                f"Encontré {len(rutas)} archivos:\n"
-                + "\n".join(
-                    f"{i}. {ruta}"
-                    for i, ruta in enumerate(rutas, 1)
-                )
-            )
-
-        # =====================================================
-        # DESCARGAS DETECTADAS
-        # =====================================================
-
-        if item.startswith("detectar_descargas:"):
-
-            if not archivos:
-                return (
-                    "No encontré descargas con evidencia de "
-                    "com.apple.quarantine en el periodo indicado."
-                )
-
-            nombres = []
-
-            for archivo_encontrado in archivos:
-
-                if not isinstance(archivo_encontrado, dict):
-                    continue
-
-                nombre = archivo_encontrado.get("nombre")
-                ruta_archivo = archivo_encontrado.get("ruta")
-                fecha = archivo_encontrado.get("descargado")
-
-                if nombre:
-                    if fecha:
-                        nombres.append(
-                            f"{nombre} | {fecha} | {ruta_archivo}"
-                        )
-                    else:
-                        nombres.append(
-                            f"{nombre} | fecha no disponible | {ruta_archivo}"
-                        )
-
-            if not nombres:
-                return (
-                    "Encontré evidencia de descargas, "
-                    "pero no pude interpretar sus datos."
-                )
-
-            return (
-                f"Encontré {len(nombres)} archivos con evidencia de descarga:\n"
-                + "\n".join(
-                    f"{i}. {nombre}"
-                    for i, nombre in enumerate(nombres, 1)
-                )
-            )
-
-        # =====================================================
-        # ARCHIVOS RECIENTES
-        # =====================================================
-
-        if item.startswith("listar_recientes:"):
-
-            # IMPORTANTE:
-            # listar_recientes informa MODIFICACIÓN.
-            # No demuestra que un archivo haya sido descargado.
-
-            if any(
-                palabra in pregunta
-                for palabra in [
-                    "descargué",
-                    "descargue",
-                    "descargados",
-                    "descargado",
-                    "descargas",
-                ]
-            ):
-                return (
-                    "No puedo determinar qué archivos fueron descargados. "
-                    "La herramienta disponible solo informa archivos "
-                    "modificados en los últimos días."
-                )
-
-            if not archivos:
-                return "No encontré nada"
-
-            nombres = []
-
-            for archivo_encontrado in archivos:
-
-                if isinstance(archivo_encontrado, dict):
-                    nombre = (
-                        archivo_encontrado.get("nombre")
-                        or archivo_encontrado.get("ruta")
-                    )
-
-                    if nombre:
-                        nombres.append(str(nombre))
-
-                elif isinstance(archivo_encontrado, str):
-                    nombres.append(archivo_encontrado)
-
-            if not nombres:
-                return "No encontré nada"
-
-            return (
-                f"Encontré {len(nombres)} archivos modificados recientemente:\n"
-                + "\n".join(
-                    f"{i}. {nombre}"
-                    for i, nombre in enumerate(nombres, 1)
-                )
-            )
-
-    return None
-
-
 class YunaAgent:
     def __init__(self, confirm_callback=None):
         self.executor = ToolExecutor(confirm_callback)
@@ -342,37 +144,15 @@ class YunaAgent:
     @staticmethod
     def _formatear_resultado_tool(name: str, result) -> str:
         """
-        Serializa resultados de herramientas de forma estable.
+        Convierte el resultado de una herramienta a texto.
 
-        Las herramientas de archivos se conservan completas y en JSON
-        para que las respuestas deterministas puedan reconstruirlas
-        sin depender de ast.literal_eval().
+        No trunca resultados normales. Solo aplica un límite amplio
+        para evitar enviar cantidades enormes de datos al modelo.
         """
-
         if result is None:
-            return f"{name}: null"
+            return f"{name}: Sin datos"
 
-        # Herramientas de archivos:
-        # conservar el resultado completo y estructurado.
-        if name in {"buscar_archivos", "listar_recientes", "detectar_descargas"}:
-            try:
-                texto = json.dumps(
-                    result,
-                    ensure_ascii=False
-                )
-            except (TypeError, ValueError):
-                texto = repr(result)
-
-            return f"{name}: {texto}"
-
-        # Otras herramientas.
-        try:
-            texto = json.dumps(
-                result,
-                ensure_ascii=False
-            )
-        except (TypeError, ValueError):
-            texto = str(result)
+        texto = str(result)
 
         if len(texto) > 12000:
             texto = (
@@ -450,30 +230,6 @@ class YunaAgent:
                     logger.info(f"Tool {name} OK")
                     self.session_stats["tools_used"].append(name)
                     self.learner.record_lesson(user_input, name, str(result)[:200], success=True)
-
-        # ---------------------------------------------------------
-        # Respuestas deterministas para herramientas de archivos
-        # ---------------------------------------------------------
-
-        respuesta_determinista = _respuesta_archivos_determinista(
-            user_input,
-            resultados_tools
-        )
-
-        if respuesta_determinista is not None:
-            respuesta = respuesta_determinista
-
-            self._guardar(user_input, respuesta, direct=False)
-            self._record_metrics(
-                start_time,
-                user_input,
-                respuesta,
-                self.session_stats["tools_used"],
-                True
-            )
-
-            logger.info(f"Respuesta determinista: {respuesta[:80]}")
-            return respuesta
 
         datos = "\n".join(resultados_tools) if resultados_tools else "Sin datos"
         prompt = f"""PREGUNTA DEL USUARIO:

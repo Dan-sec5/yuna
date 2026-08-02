@@ -254,10 +254,6 @@ class LearningEngine:
 
             success_rate = data["success"] / total
 
-            # No recomendar herramientas que nunca han tenido éxito.
-            if data["success"] == 0:
-                continue
-
             # Ranking combinado.
             final_score = (
                 data["similarity"] * 0.50

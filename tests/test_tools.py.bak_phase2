@@ -97,17 +97,3 @@ def test_bash_whitelist():
     assert is_bash_allowed("cat archivo.txt") == True
     assert is_bash_allowed("rm -rf /") == False
     assert is_bash_allowed("sudo comando") == False
-
-
-def test_detectar_descargas():
-    from tools.archivos import detectar_descargas
-
-    resultado = detectar_descargas("~/Downloads", dias=30)
-
-    assert isinstance(resultado, list)
-
-    for item in resultado:
-        assert isinstance(item, dict)
-        assert "nombre" in item
-        assert "ruta" in item
-        assert "evidencia" in item

@@ -178,113 +178,23 @@ class LearningEngine:
             ]
 
     def get_best_tools_for(self, query: str) -> List[str]:
-        """
-        Devuelve las herramientas más adecuadas para una consulta.
-
-        El ranking combina:
-        - similitud del patrón
-        - tasa histórica de éxito
-        - cantidad de experiencias
-        """
-
-        pattern = self._extract_pattern(query)
-
-        if not pattern:
-            return []
-
-        query_words = self._normalize_learning_words(pattern)
-
-        lessons = self.get_lessons_for_query(query, limit=20)
-
-        if not lessons:
-            return []
-
+        lessons = self.get_lessons_for_query(query, limit=10)
         tool_scores = {}
-
-        for lesson in lessons:
-            tool = lesson["tool"]
-            success = lesson["success"]
-            count = lesson["count"]
-
-            saved_pattern = lesson["pattern"]
-            saved_words = self._normalize_learning_words(
-                self._extract_pattern(saved_pattern)
-            )
-
-            if not saved_words:
-                continue
-
-            comunes = query_words & saved_words
-
-            if not comunes:
-                continue
-
-            similarity = len(comunes) / max(
-                len(query_words),
-                len(saved_words)
-            )
-
-            if tool not in tool_scores:
-                tool_scores[tool] = {
-                    "success": 0,
-                    "fail": 0,
-                    "similarity": 0.0,
-                    "experience": 0,
-                }
-
-            if success:
-                tool_scores[tool]["success"] += count
+        for l in lessons:
+            if l["tool"] not in tool_scores:
+                tool_scores[l["tool"]] = {"success": 0, "fail": 0}
+            if l["success"]:
+                tool_scores[l["tool"]]["success"] += l["count"]
             else:
-                tool_scores[tool]["fail"] += count
-
-            tool_scores[tool]["similarity"] = max(
-                tool_scores[tool]["similarity"],
-                similarity
-            )
-
-            tool_scores[tool]["experience"] += count
-
+                tool_scores[l["tool"]]["fail"] += l["count"]
         ranked = []
-
-        for tool, data in tool_scores.items():
-            total = data["success"] + data["fail"]
-
-            if total == 0:
-                continue
-
-            success_rate = data["success"] / total
-
-            # No recomendar herramientas que nunca han tenido éxito.
-            if data["success"] == 0:
-                continue
-
-            # Ranking combinado.
-            final_score = (
-                data["similarity"] * 0.50
-                + success_rate * 0.40
-                + min(data["experience"], 10) / 10 * 0.10
-            )
-
-            ranked.append(
-                (
-                    tool,
-                    final_score,
-                    success_rate,
-                    data["similarity"],
-                    data["experience"],
-                )
-            )
-
-        ranked.sort(
-            key=lambda x: (
-                -x[1],
-                -x[2],
-                -x[3],
-                -x[4],
-            )
-        )
-
-        return [item[0] for item in ranked[:3]]
+        for tool, scores in tool_scores.items():
+            total = scores["success"] + scores["fail"]
+            if total > 0:
+                rate = scores["success"] / total
+                ranked.append((tool, rate, total))
+        ranked.sort(key=lambda x: (-x[1], -x[2]))
+        return [t[0] for t in ranked[:3]]
 
     def _extract_pattern(self, query: str) -> str:
         import re

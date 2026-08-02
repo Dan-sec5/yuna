@@ -34,27 +34,6 @@ ALL_SCHEMAS: List[Dict] = [
     {
         "type": "function",
         "function": {
-            "name": "detectar_descargas",
-            "description": "Detecta archivos con evidencia de descarga de macOS en una carpeta durante los últimos N días",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "carpeta": {
-                        "type": "string",
-                        "description": "Ruta a revisar, normalmente ~/Downloads"
-                    },
-                    "dias": {
-                        "type": "integer",
-                        "description": "Número de días hacia atrás, default 30"
-                    }
-                },
-                "required": ["carpeta"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "organizar_archivos",
             "description": "Organiza archivos por tipo en subcarpetas",
             "parameters": {

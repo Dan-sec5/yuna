@@ -11,7 +11,6 @@ class PermissionLevel(Enum):
 _PERMISSIONS = {
     "buscar_archivos": PermissionLevel.SAFE,
     "listar_recientes": PermissionLevel.SAFE,
-    "detectar_descargas": PermissionLevel.SAFE,
     "leer_texto": PermissionLevel.SAFE,
     "leer_excel": PermissionLevel.SAFE,
     "leer_csv": PermissionLevel.SAFE,

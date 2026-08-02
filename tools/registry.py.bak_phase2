@@ -1,5 +1,5 @@
 from tools.archivos import (
-    buscar_archivos, listar_recientes, detectar_descargas, organizar_por_tipo, leer_texto
+    buscar_archivos, listar_recientes, organizar_por_tipo, leer_texto
 )
 from tools.datos import leer_excel, leer_csv, leer_pdf
 from tools.web import buscar_web, precio_activo, noticias_financieras_mx
@@ -9,7 +9,6 @@ from memory.manager import consultar_memoria, escribir_memoria
 TOOLS = {
     "buscar_archivos": buscar_archivos,
     "listar_recientes": listar_recientes,
-    "detectar_descargas": detectar_descargas,
     "organizar_archivos": organizar_por_tipo,
     "leer_texto": leer_texto,
     "leer_excel": leer_excel,

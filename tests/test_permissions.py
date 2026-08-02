@@ -50,3 +50,7 @@ def test_bash_blocks_private_home_directories():
     assert is_bash_allowed("ls ~/.aws") is False
     assert is_bash_allowed("ls ~/.config") is False
     assert is_bash_allowed("ls ~/Library") is False
+
+
+def test_detectar_descargas_es_safe():
+    assert check_permission("detectar_descargas") == PermissionLevel.SAFE

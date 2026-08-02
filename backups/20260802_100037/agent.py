@@ -153,7 +153,7 @@ def _respuesta_archivos_determinista(user_input: str, resultados_tools: list):
         if not isinstance(item, str):
             continue
 
-        if not item.startswith(("buscar_archivos:", "listar_recientes:", "detectar_descargas:")):
+        if not item.startswith(("buscar_archivos:", "listar_recientes:")):
             continue
 
         try:
@@ -222,53 +222,6 @@ def _respuesta_archivos_determinista(user_input: str, resultados_tools: list):
                 + "\n".join(
                     f"{i}. {ruta}"
                     for i, ruta in enumerate(rutas, 1)
-                )
-            )
-
-        # =====================================================
-        # DESCARGAS DETECTADAS
-        # =====================================================
-
-        if item.startswith("detectar_descargas:"):
-
-            if not archivos:
-                return (
-                    "No encontré descargas con evidencia de "
-                    "com.apple.quarantine en el periodo indicado."
-                )
-
-            nombres = []
-
-            for archivo_encontrado in archivos:
-
-                if not isinstance(archivo_encontrado, dict):
-                    continue
-
-                nombre = archivo_encontrado.get("nombre")
-                ruta_archivo = archivo_encontrado.get("ruta")
-                fecha = archivo_encontrado.get("descargado")
-
-                if nombre:
-                    if fecha:
-                        nombres.append(
-                            f"{nombre} | {fecha} | {ruta_archivo}"
-                        )
-                    else:
-                        nombres.append(
-                            f"{nombre} | fecha no disponible | {ruta_archivo}"
-                        )
-
-            if not nombres:
-                return (
-                    "Encontré evidencia de descargas, "
-                    "pero no pude interpretar sus datos."
-                )
-
-            return (
-                f"Encontré {len(nombres)} archivos con evidencia de descarga:\n"
-                + "\n".join(
-                    f"{i}. {nombre}"
-                    for i, nombre in enumerate(nombres, 1)
                 )
             )
 
@@ -354,7 +307,7 @@ class YunaAgent:
 
         # Herramientas de archivos:
         # conservar el resultado completo y estructurado.
-        if name in {"buscar_archivos", "listar_recientes", "detectar_descargas"}:
+        if name in {"buscar_archivos", "listar_recientes"}:
             try:
                 texto = json.dumps(
                     result,
