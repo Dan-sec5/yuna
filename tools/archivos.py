@@ -71,10 +71,12 @@ def organizar_por_tipo(carpeta_origen: str = "~/Downloads") -> list:
 def leer_texto(ruta: str) -> str:
     """Lee un archivo de texto. Lanza FileNotFoundError si no existe."""
     ruta = os.path.expanduser(ruta)
-    # FIX: Lanzar excepcion si no existe (compatibilidad con tests)
+
     if not os.path.exists(ruta):
         raise FileNotFoundError(f"Archivo no encontrado: {ruta}")
+
     if os.path.getsize(ruta) > 10 * 1024 * 1024:
         raise ValueError("Archivo demasiado grande (>10MB)")
+
     with open(ruta, "r", encoding="utf-8", errors="ignore") as f:
         return f.read()

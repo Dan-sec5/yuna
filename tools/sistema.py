@@ -71,18 +71,88 @@ def notificar(titulo: str, mensaje: str) -> str:
         return f"⚠ Error notificando: {e}"
 
 def crear_archivo(ruta: str, contenido: str) -> str:
-    ruta = os.path.expanduser(ruta)
-    ruta_abs = os.path.abspath(ruta)
-    home_abs = os.path.abspath(os.path.expanduser("~"))
-    if not (ruta_abs.startswith(home_abs) or ruta_abs.startswith("/tmp")):
-        return f"⛔ Ruta no permitida: {ruta}. Solo dentro de ~/ o /tmp/"
-    if os.path.exists(ruta_abs):
-        backup = ruta_abs + ".bak"
-        os.rename(ruta_abs, backup)
-    os.makedirs(os.path.dirname(ruta_abs) if os.path.dirname(ruta_abs) else ".", exist_ok=True)
-    with open(ruta_abs, "w", encoding="utf-8") as f:
-        f.write(contenido)
-    return f"✓ Archivo creado: {ruta}"
+    """Crea archivos únicamente dentro de directorios autorizados."""
+
+    from pathlib import Path
+
+    home = Path.home().resolve()
+
+    directorios_permitidos = [
+        (home / "yuna").resolve(),
+        (home / "Downloads").resolve(),
+        (home / "Desktop").resolve(),
+        (home / "Documents").resolve(),
+        (home / "Pictures").resolve(),
+        (home / "Movies").resolve(),
+        (home / "Music").resolve(),
+        Path("/tmp").resolve(),
+    ]
+
+    rutas_sensibles = [
+        (home / ".ssh").resolve(),
+        (home / ".aws").resolve(),
+        (home / ".config").resolve(),
+        Path("/etc").resolve(),
+        Path("/System").resolve(),
+        Path("/private").resolve(),
+        Path("/var").resolve(),
+    ]
+
+    ruta_expandida = Path(os.path.expanduser(ruta))
+
+    try:
+        ruta_abs = ruta_expandida.resolve()
+    except OSError:
+        return f"⛔ Ruta no permitida: {ruta}"
+
+    # macOS: /tmp normalmente resuelve físicamente a /private/tmp.
+    tmp_real = Path("/tmp").resolve()
+
+    try:
+        ruta_abs.relative_to(tmp_real)
+        es_tmp = True
+    except ValueError:
+        es_tmp = False
+
+    # Bloquear rutas sensibles, excepto /private/tmp.
+    if not es_tmp:
+        for sensible in rutas_sensibles:
+            try:
+                ruta_abs.relative_to(sensible)
+                return f"⛔ Ruta no permitida: {ruta}"
+            except ValueError:
+                pass
+
+    # La ruta debe estar dentro de un directorio autorizado.
+    permitida = False
+
+    for base in directorios_permitidos:
+        try:
+            ruta_abs.relative_to(base)
+            permitida = True
+            break
+        except ValueError:
+            pass
+
+    if not permitida:
+        return (
+            f"⛔ Ruta no permitida: {ruta}. "
+            "Solo dentro de los directorios autorizados."
+        )
+
+    try:
+        ruta_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        if ruta_abs.exists():
+            backup = Path(str(ruta_abs) + ".bak")
+            ruta_abs.replace(backup)
+
+        ruta_abs.write_text(contenido, encoding="utf-8")
+
+        return f"✓ Archivo creado: {ruta_abs}"
+
+    except Exception as e:
+        return f"⚠ Error creando archivo: {e}"
 
 def info_sistema() -> str:
     try:

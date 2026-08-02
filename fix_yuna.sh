@@ -280,14 +280,6 @@ class LearningEngine:
         stopwords = {"el", "la", "los", "las", "un", "una", "de", "en", "con", "por", "para", "que", "me", "mi", "yo"}
         words = [w.lower() for w in query.split() if len(w) > 3 and w.lower() not in stopwords]
         return " ".join(words[:3])
-
-def add_interaction_metric(query: str, response: str, tools: list, success: bool, latency: float):
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """INSERT INTO interaction_metrics (query, response, tools_used, success, latency_ms)
-               VALUES (?, ?, ?, ?, ?)""",
-            (query[:500], response[:500], json.dumps(tools), success, latency * 1000)
-        )
 PYEOF
 
 # ============================================
@@ -563,7 +555,15 @@ def init_db():
                 datos JSON,
                 actualizado TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS conversation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT,
+                role TEXT,
+                content TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE INDEX IF NOT EXISTS idx_episodic_fecha ON episodic(fecha);
+            CREATE INDEX IF NOT EXISTS idx_conversation_session ON conversation_history(session_id, timestamp);
             CREATE TABLE IF NOT EXISTS entity_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 entity TEXT UNIQUE,
@@ -573,6 +573,34 @@ def init_db():
                 updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_entity ON entity_memory(entity);
+            CREATE TABLE IF NOT EXISTS lessons (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                query_pattern TEXT,
+                tool_name TEXT,
+                outcome TEXT,
+                success BOOLEAN,
+                count INTEGER DEFAULT 1
+            );
+            CREATE INDEX IF NOT EXISTS idx_lessons_pattern ON lessons(query_pattern);
+            CREATE INDEX IF NOT EXISTS idx_lessons_tool ON lessons(tool_name);
+            CREATE TABLE IF NOT EXISTS user_feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                query TEXT,
+                response TEXT,
+                feedback TEXT,
+                score INTEGER
+            );
+            CREATE TABLE IF NOT EXISTS interaction_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                query TEXT,
+                response TEXT,
+                tools_used TEXT,
+                success BOOLEAN,
+                latency_ms REAL
+            );
         """)
 
 def set_preferencia(clave: str, valor: str):
@@ -643,43 +671,114 @@ def get_entity(entity: str) -> Optional[str]:
         row = cur.fetchone()
         return f"{row[1]}: {row[0]}" if row else None
 
+def add_conversation_turn(session_id: str, role: str, content: str):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO conversation_history (session_id, role, content) VALUES (?, ?, ?)",
+            (session_id, role, content[:2000])
+        )
+
+def get_conversation_history(session_id: str, limit: int = 10) -> List[Dict]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute(
+                "SELECT role, content, timestamp FROM conversation_history "
+                "WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
+                (session_id, limit)
+            )
+            rows = cur.fetchall()
+            return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in reversed(rows)]
+    except sqlite3.OperationalError:
+        return []
+
+def get_last_session_id() -> Optional[str]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cur = conn.execute(
+                "SELECT session_id FROM conversation_history ORDER BY timestamp DESC LIMIT 1"
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    except sqlite3.OperationalError:
+        return None
+
 def get_relevant_memory(query: str, top_k: int = 5) -> str:
     partes = []
     query_lower = query.lower()
-    entities = re.findall(r'\b[A-Z][a-z]+\b', query)
+
+    # Entidades explícitas: nombres propios y texto entre comillas.
+    entities = re.findall(r"\b[A-Z][a-z]+\b", query)
     entities += re.findall(r'"([^"]+)"', query)
+
     entity_data = []
     for ent in entities:
         val = get_entity(ent)
         if val:
             entity_data.append(f"{ent} -> {val}")
-    if entity_data:
-        partes.append("ENTIDADES CONOCIDAS:\n" + "\n".join(entity_data))
 
+    if entity_data:
+        partes.append(
+            "ENTIDADES CONOCIDAS:\n" +
+            "\n".join(entity_data)
+        )
+
+    # Preferencias relacionadas con palabras de la consulta.
     prefs = get_all_preferencias()
     relevant_prefs = {}
+
     for k, v in prefs.items():
         k_lower = k.lower()
         v_lower = str(v).lower()
-        if any(word in k_lower or word in v_lower for word in query_lower.split() if len(word) > 3):
-            relevant_prefs[k] = v
-    if relevant_prefs:
-        partes.append("PREFERENCIAS RELEVANTES:\n" +
-            "\n".join(f"- {k}: {v}" for k, v in list(relevant_prefs.items())[:top_k]))
 
+        if any(
+            word in k_lower or word in v_lower
+            for word in query_lower.split()
+            if len(word) > 3
+        ):
+            relevant_prefs[k] = v
+
+    if relevant_prefs:
+        partes.append(
+            "PREFERENCIAS RELEVANTES:\n" +
+            "\n".join(
+                f"- {k}: {v}"
+                for k, v in list(relevant_prefs.items())[:top_k]
+            )
+        )
+
+    # Memoria episódica.
     episodic = get_episodic(20)
     relevant_episodes = []
-    query_words = set(w for w in query_lower.split() if len(w) > 3)
+
+    query_words = {
+        w for w in query_lower.split()
+        if len(w) > 3
+    }
+
     for e in episodic:
         content = f"{e['evento']} {e['detalles']}".lower()
         score = len(query_words & set(content.split()))
+
         if score > 0 or len(relevant_episodes) < 3:
             relevant_episodes.append((score, e))
-    relevant_episodes.sort(reverse=True)
-    top_episodes = [e for _, e in relevant_episodes[:top_k]]
+
+    relevant_episodes.sort(
+        key=lambda x: x[0],
+        reverse=True
+    )
+
+    top_episodes = [
+        e for _, e in relevant_episodes[:top_k]
+    ]
+
     if top_episodes:
-        partes.append("HISTORIAL RELEVANTE:\n" +
-            "\n".join(f"- [{e['fecha']}] {e['evento']}" for e in top_episodes))
+        partes.append(
+            "HISTORIAL RELEVANTE:\n" +
+            "\n".join(
+                f"- [{e['fecha']}] {e['evento']}"
+                for e in top_episodes
+            )
+        )
 
     return "\n\n".join(partes) if partes else ""
 
@@ -722,6 +821,15 @@ def escribir_memoria(clave: str, valor: str) -> str:
 def escribir_entidad(entidad: str, relacion: str, valor: str) -> str:
     set_entity(entidad, relacion, valor)
     return f"✓ Entidad guardada: {entidad} es {relacion} de {valor}"
+
+def add_interaction_metric(query: str, response: str, tools: list, success: bool, latency: float):
+    import json
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute(
+            """INSERT INTO interaction_metrics (query, response, tools_used, success, latency_ms)
+               VALUES (?, ?, ?, ?, ?)""",
+            (query[:500], response[:500], json.dumps(tools), success, latency * 1000)
+        )
 PYEOF
 
 # ============================================
@@ -736,25 +844,53 @@ from datetime import datetime
 from tools.permisos import is_bash_allowed
 
 def ejecutar_bash_seguro(comando: str) -> str:
+    """Ejecuta comandos Bash simples previamente autorizados."""
     if not is_bash_allowed(comando):
         cmd = comando.strip().split()[0] if comando.strip() else ""
-        return f"⛔ Comando '{cmd}' no permitido. Permitidos: ls, cat, echo, pwd, head, tail, grep, find, wc, date, du, df"
+        return (
+            f"⛔ Comando '{cmd}' no permitido. "
+            "Revisa la whitelist y las rutas autorizadas."
+        )
+
     comando_limpio = comando.strip()
-    if re.search(r'[;&|`$()]', comando_limpio):
-        return "⛔ Detectados caracteres de shell injection. Solo comandos simples permitidos."
-    partes = comando_limpio.split()
+
+    if re.search(r"[;&|`$()<>]", comando_limpio):
+        return "⛔ Detectados caracteres de shell injection."
+
+    try:
+        import shlex
+        partes = shlex.split(comando_limpio)
+    except ValueError:
+        return "⛔ Sintaxis de comando invalida."
+
+    if not partes:
+        return "⛔ Comando vacio."
+
     if len(partes) > 5:
         return "⛔ Comando demasiado complejo. Maximo 5 argumentos."
+
+    # Resolver ~ de forma independiente para cada argumento.
+    partes = [os.path.expanduser(p) for p in partes]
+
     try:
         resultado = subprocess.run(
             partes,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=10,
+            shell=False,
+            cwd=os.path.expanduser("~/yuna"),
         )
-        return resultado.stdout.strip() or resultado.stderr.strip() or "✓ Sin salida"
+
+        return (
+            resultado.stdout.strip()
+            or resultado.stderr.strip()
+            or "✓ Sin salida"
+        )
+
     except subprocess.TimeoutExpired:
         return "⏱ Timeout: el comando tardo demasiado"
+
     except Exception as e:
         return f"Error: {e}"
 
@@ -773,18 +909,88 @@ def notificar(titulo: str, mensaje: str) -> str:
         return f"⚠ Error notificando: {e}"
 
 def crear_archivo(ruta: str, contenido: str) -> str:
-    ruta = os.path.expanduser(ruta)
-    ruta_abs = os.path.abspath(ruta)
-    home_abs = os.path.abspath(os.path.expanduser("~"))
-    if not (ruta_abs.startswith(home_abs) or ruta_abs.startswith("/tmp")):
-        return f"⛔ Ruta no permitida: {ruta}. Solo dentro de ~/ o /tmp/"
-    if os.path.exists(ruta_abs):
-        backup = ruta_abs + ".bak"
-        os.rename(ruta_abs, backup)
-    os.makedirs(os.path.dirname(ruta_abs) if os.path.dirname(ruta_abs) else ".", exist_ok=True)
-    with open(ruta_abs, "w", encoding="utf-8") as f:
-        f.write(contenido)
-    return f"✓ Archivo creado: {ruta}"
+    """Crea archivos únicamente dentro de directorios autorizados."""
+
+    from pathlib import Path
+
+    home = Path.home().resolve()
+
+    directorios_permitidos = [
+        (home / "yuna").resolve(),
+        (home / "Downloads").resolve(),
+        (home / "Desktop").resolve(),
+        (home / "Documents").resolve(),
+        (home / "Pictures").resolve(),
+        (home / "Movies").resolve(),
+        (home / "Music").resolve(),
+        Path("/tmp").resolve(),
+    ]
+
+    rutas_sensibles = [
+        (home / ".ssh").resolve(),
+        (home / ".aws").resolve(),
+        (home / ".config").resolve(),
+        Path("/etc").resolve(),
+        Path("/System").resolve(),
+        Path("/private").resolve(),
+        Path("/var").resolve(),
+    ]
+
+    ruta_expandida = Path(os.path.expanduser(ruta))
+
+    try:
+        ruta_abs = ruta_expandida.resolve()
+    except OSError:
+        return f"⛔ Ruta no permitida: {ruta}"
+
+    # macOS: /tmp normalmente resuelve físicamente a /private/tmp.
+    tmp_real = Path("/tmp").resolve()
+
+    try:
+        ruta_abs.relative_to(tmp_real)
+        es_tmp = True
+    except ValueError:
+        es_tmp = False
+
+    # Bloquear rutas sensibles, excepto /private/tmp.
+    if not es_tmp:
+        for sensible in rutas_sensibles:
+            try:
+                ruta_abs.relative_to(sensible)
+                return f"⛔ Ruta no permitida: {ruta}"
+            except ValueError:
+                pass
+
+    # La ruta debe estar dentro de un directorio autorizado.
+    permitida = False
+
+    for base in directorios_permitidos:
+        try:
+            ruta_abs.relative_to(base)
+            permitida = True
+            break
+        except ValueError:
+            pass
+
+    if not permitida:
+        return (
+            f"⛔ Ruta no permitida: {ruta}. "
+            "Solo dentro de los directorios autorizados."
+        )
+
+    try:
+        ruta_abs.parent.mkdir(parents=True, exist_ok=True)
+
+        if ruta_abs.exists():
+            backup = Path(str(ruta_abs) + ".bak")
+            ruta_abs.replace(backup)
+
+        ruta_abs.write_text(contenido, encoding="utf-8")
+
+        return f"✓ Archivo creado: {ruta_abs}"
+
+    except Exception as e:
+        return f"⚠ Error creando archivo: {e}"
 
 def info_sistema() -> str:
     try:
@@ -836,13 +1042,120 @@ def check_permission(tool_name: str) -> PermissionLevel:
     return perm
 
 def is_bash_allowed(comando: str) -> bool:
+    """Valida comandos Bash simples y restringe el acceso a rutas sensibles."""
+
+    import re
+    import shlex
+    from pathlib import Path
+
     if not comando or not comando.strip():
         return False
-    cmd = comando.strip().split()[0]
-    allowed = cmd in _BASH_WHITELIST
-    if not allowed:
+
+    comando = comando.strip()
+
+    # Nunca permitir operadores o construcciones del shell.
+    if re.search(r"[;&|`$()<>]", comando):
+        logger.warning(f"Bash bloqueado por operador shell: {comando}")
+        return False
+
+    try:
+        partes = shlex.split(comando)
+    except ValueError:
+        logger.warning(f"Bash bloqueado por sintaxis invalida: {comando}")
+        return False
+
+    if not partes:
+        return False
+
+    cmd = partes[0]
+
+    if cmd not in _BASH_WHITELIST:
         logger.warning(f"Bash bloqueado: {comando}")
-    return allowed
+        return False
+
+    home = Path.home().resolve()
+    yuna = (home / "yuna").resolve()
+    downloads = (home / "Downloads").resolve()
+    desktop = (home / "Desktop").resolve()
+    documents = (home / "Documents").resolve()
+    pictures = (home / "Pictures").resolve()
+    movies = (home / "Movies").resolve()
+    music = (home / "Music").resolve()
+    tmp = Path("/tmp").resolve()
+
+    root = Path("/").resolve()
+
+    rutas_sensibles = {
+        Path("/etc").resolve(),
+        Path("/System").resolve(),
+        Path("/private").resolve(),
+        Path("/var").resolve(),
+        (home / ".ssh").resolve(),
+        (home / ".aws").resolve(),
+        (home / ".config").resolve(),
+    }
+
+    def ruta_permitida(valor: str) -> bool:
+        """Comprueba que una ruta quede dentro de un directorio autorizado."""
+
+        ruta = Path(valor).expanduser()
+
+        # Las rutas relativas se interpretan respecto al workspace de Yuna.
+        if not ruta.is_absolute():
+            ruta = yuna / ruta
+
+        try:
+            ruta = ruta.resolve()
+        except OSError:
+            return False
+
+        # Nunca permitir la raiz del sistema ni rutas sensibles.
+        if ruta == root:
+            return False
+
+        for sensible in rutas_sensibles:
+            try:
+                ruta.relative_to(sensible)
+                return False
+            except ValueError:
+                pass
+
+        # Directorios de trabajo autorizados.
+        for base in (
+            yuna,
+            downloads,
+            desktop,
+            documents,
+            pictures,
+            movies,
+            music,
+            tmp,
+        ):
+            try:
+                ruta.relative_to(base)
+                return True
+            except ValueError:
+                pass
+
+        return False
+
+    # Argumentos que parecen rutas deben permanecer dentro
+    # de los directorios autorizados.
+    for argumento in partes[1:]:
+        if argumento.startswith("-"):
+            continue
+
+        # Argumentos de grep/find pueden ser patrones, no rutas.
+        if cmd in {"grep", "find"} and argumento.startswith("*"):
+            continue
+
+        if not ruta_permitida(argumento):
+            logger.warning(
+                f"Bash bloqueado por ruta no permitida: {comando}"
+            )
+            return False
+
+    return True
 
 def confirm_user(tool_name: str, args: dict) -> bool:
     print(f"\n⚠ Confirmacion: {tool_name}({args})")
@@ -926,16 +1239,17 @@ def organizar_por_tipo(carpeta_origen: str = "~/Downloads") -> list:
     return movidos
 
 def leer_texto(ruta: str) -> str:
+    """Lee un archivo de texto. Lanza FileNotFoundError si no existe."""
     ruta = os.path.expanduser(ruta)
+
     if not os.path.exists(ruta):
-        return f"Error: archivo no encontrado: {ruta}"
+        raise FileNotFoundError(f"Archivo no encontrado: {ruta}")
+
     if os.path.getsize(ruta) > 10 * 1024 * 1024:
-        return "Error: archivo demasiado grande (>10MB)"
-    try:
-        with open(ruta, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
-    except Exception as e:
-        return f"Error leyendo archivo: {e}"
+        raise ValueError("Archivo demasiado grande (>10MB)")
+
+    with open(ruta, "r", encoding="utf-8", errors="ignore") as f:
+        return f.read()
 PYEOF
 
 # ============================================
