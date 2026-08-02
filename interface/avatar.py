@@ -3,7 +3,6 @@ from PIL import Image
 import subprocess
 import threading
 import os
-import glob
 from datetime import datetime
 
 ctk.set_appearance_mode("dark")
@@ -36,7 +35,7 @@ class YunaAvatar:
 
         self.app = ctk.CTk()
         self.app.title("Yuna")
-        self.app.geometry(f"{self.ancho+20}x{self.alto+190}+50+350")
+        self.app.geometry(f"{self.ancho+20}x{self.alto+185}+50+350")
         self.app.attributes("-topmost", True)
         self.app.attributes("-alpha", 0.97)
         self.app.overrideredirect(True)
@@ -66,30 +65,24 @@ class YunaAvatar:
 
         ctk.CTkLabel(self.app, text="✦ Yuna", font=("Helvetica", 13, "bold"), text_color="#a78bfa").pack(pady=(0, 6))
 
-        # FIX: Usar python3 en vez de python, y rutas correctas
-        ctk.CTkButton(self.app, text="💬 Hablar", width=self.ancho,
+        # 4 botones limpios, sin redundancia
+        ctk.CTkButton(self.app, text="💬 Chat", width=self.ancho,
             fg_color="#534AB7", hover_color="#3d368a",
             command=lambda: abrir_terminal("cd ~/yuna && python3 app.py chat")).pack(pady=3)
 
-        ctk.CTkButton(self.app, text="⚡ Ejecutar", width=self.ancho,
-            fg_color="#185FA5", hover_color="#0f4578",
-            command=lambda: abrir_terminal("cd ~/yuna && python3 app.py agent")).pack(pady=3)
-
-        ctk.CTkButton(self.app, text="🤖 Modo Agente", width=self.ancho,
+        ctk.CTkButton(self.app, text="🤖 Agente", width=self.ancho,
             fg_color="#7C3AED", hover_color="#5B21B6",
             command=lambda: abrir_terminal("cd ~/yuna && python3 app.py agent")).pack(pady=3)
 
-        # FIX: aprender.py existe, no yuna_aprender
         ctk.CTkButton(self.app, text="🧠 Aprender", width=self.ancho,
             fg_color="#0F6E56", hover_color="#094d3c",
             command=lambda: abrir_terminal("cd ~/yuna && python3 aprender.py")).pack(pady=3)
 
-        ctk.CTkButton(self.app, text="❌ Cerrar Yuna", width=self.ancho,
+        ctk.CTkButton(self.app, text="❌ Cerrar", width=self.ancho,
             fg_color="#7f1d1d", hover_color="#5c1414",
             command=self.cerrar_yuna).pack(pady=(3, 8))
 
         self.label_img.bind("<Button-1>", self.mover)
-        ctk.CTkLabel(self.app, text="").bind("<Button-1>", self.mover)
 
         self.app.mainloop()
 
