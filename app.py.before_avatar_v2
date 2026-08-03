@@ -34,7 +34,7 @@ Uso:
         agent_main()
     
     elif cmd == "avatar":
-        from interface.avatar_v2 import main as avatar_main
+        from interface.avatar import main as avatar_main
         avatar_main()
     
     elif cmd == "migrate":
