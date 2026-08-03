@@ -1,8 +1,6 @@
 import os
-
 import customtkinter as ctk
 from PIL import Image
-
 from interface.actions import (
     abrir_chat,
     abrir_agente,
@@ -10,743 +8,385 @@ from interface.actions import (
     cerrar_yuna,
 )
 
-
-# ============================================================
-# YUNA UI V2
-# UI visual desacoplada del backend
-# ============================================================
-
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# ── PALETA RETRO-GAME ────────────────────────────────────────
+BG       = "#0d0d1a"
+SURFACE  = "#13132b"
+PANEL    = "#1a1a38"
+PANEL2   = "#0f0f22"
 
-# ============================================================
-# PALETA
-# ============================================================
+BLUE     = "#4fc3f7"
+BLUE_DIM = "#1a6a8a"
+BLUE_BG  = "#0a1929"
+BLUE_HVR = "#29b6f6"
 
-BG = "#09090f"
-SURFACE = "#0d0d13"
-SURFACE_HOVER = "#171720"
+GOLD     = "#ffd700"
+GOLD_DIM = "#997a00"
+GOLD_BG  = "#1a1500"
 
-ACCENT = "#a78bfa"
-ACCENT_HOVER = "#ae86ff"
-ACCENT_SOFT = "#211735"
+RED      = "#ff5252"
+GREEN    = "#69ff47"
+GREEN_DIM= "#256b12"
 
-TEXT = "#f7f5fc"
-TEXT_SECONDARY = "#c8c3d4"
-MUTED = "#777284"
+TEXT     = "#ffffff"
+TEXT2    = "#b0bec5"
+MUTED    = "#546e7a"
+BORDER   = "#2a2a50"
+BORDER_B = "#4fc3f7"
 
-SUCCESS = "#43dfa0"
+# fuente limpia tipo juego
+F_TITLE  = ("Arial Rounded MT Bold", )
+F_BODY   = ("Arial", )
+F_MONO   = ("Courier", )
 
-BORDER = "#1c1b25"
-
-
-# ============================================================
-# ESTADOS
-# ============================================================
-
-YUNA_STATES = {
-    "ready": {
-        "symbol": "●",
-        "text": "Lista para ayudarte",
-        "color": SUCCESS,
-    },
-    "thinking": {
-        "symbol": "◐",
-        "text": "Pensando...",
-        "color": ACCENT,
-    },
-    "executing": {
-        "symbol": "◉",
-        "text": "Ejecutando...",
-        "color": ACCENT,
-    },
-    "done": {
-        "symbol": "✓",
-        "text": "Listo",
-        "color": SUCCESS,
-    },
-    "offline": {
-        "symbol": "○",
-        "text": "Desconectada",
-        "color": MUTED,
-    },
+# ── ESTADOS ──────────────────────────────────────────────────
+STATES = {
+    "ready":     {"sym": "▶", "txt": "Lista",       "col": GREEN, "bar": GREEN},
+    "thinking":  {"sym": "◆", "txt": "Pensando...", "col": GOLD,  "bar": GOLD},
+    "executing": {"sym": "◆", "txt": "Ejecutando",  "col": BLUE,  "bar": BLUE},
+    "done":      {"sym": "★", "txt": "Listo",        "col": GREEN, "bar": GREEN},
+    "offline":   {"sym": "◯", "txt": "Desconectada","col": MUTED, "bar": MUTED},
 }
 
-
-# ============================================================
-# AVATAR
-# ============================================================
-
 def buscar_avatar():
-    for patron in (
-        "avatar.gif",
-        "avatar.png",
-        "avatar.jpg",
-        "avatar.jpeg",
-        "avatar.webp",
-    ):
-        ruta = os.path.expanduser(f"~/yuna/{patron}")
-
-        if os.path.exists(ruta):
-            return ruta
-
+    for ext in ("avatar.gif","avatar.png","avatar.jpg","avatar.jpeg","avatar.webp"):
+        p = os.path.expanduser(f"~/yuna/{ext}")
+        if os.path.exists(p):
+            return p
     return None
 
-
-# ============================================================
-# YUNA
-# ============================================================
-
+# ── CLASE PRINCIPAL ──────────────────────────────────────────
 class YunaAvatar:
 
     def __init__(self):
-
         self.app = ctk.CTk()
-
-        self.app.title("Yuna")
-        self.app.geometry("390x680+70+90")
-        self.app.minsize(360, 600)
-
-        self.app.configure(
-            fg_color=BG
-        )
-
-        self.app.attributes(
-            "-topmost",
-            True
-        )
-
-        self.app.attributes(
-            "-alpha",
-            0.985
-        )
-
+        self.app.title("YUNA")
+        self.app.geometry("300x660+70+90")
+        self.app.minsize(280, 580)
+        self.app.configure(fg_color=BG)
+        self.app.attributes("-topmost", True)
+        self.app.attributes("-alpha", 0.97)
         self.app.overrideredirect(True)
 
-        self.frames = []
+        self.frames    = []
         self.frame_idx = 0
-
         self.current_status = "ready"
+        self._drag_x   = 0
+        self._drag_y   = 0
 
-        self._drag_x = 0
-        self._drag_y = 0
+        self._topbar()
+        self._nametag()
+        self._avatar_card(buscar_avatar())
+        self._hp_bar()
+        self._actions()
+        self._footer()
 
-        self._build_topbar()
-        self._build_identity()
-        self._build_avatar(
-            buscar_avatar()
-        )
-        self._build_status()
-        self._build_actions()
-        self._build_footer()
-
-        self.app.bind(
-            "<Button-1>",
-            self._start_drag
-        )
-
-        self.app.bind(
-            "<B1-Motion>",
-            self._drag
-        )
-
+        self.app.bind("<Button-1>", self._start_drag)
+        self.app.bind("<B1-Motion>", self._drag)
         self.app.mainloop()
 
-
-    # ========================================================
-    # TOP BAR
-    # ========================================================
-
-    def _build_topbar(self):
-
-        bar = ctk.CTkFrame(
-            self.app,
-            fg_color="transparent",
-            height=38,
+    # ── TOP BAR ──────────────────────────────────────────────
+    def _topbar(self):
+        bar = ctk.CTkFrame(self.app,
+            fg_color=PANEL2, corner_radius=0,
+            height=30, border_width=0,
         )
-
-        bar.pack(
-            fill="x",
-            padx=18,
-            pady=(12, 0),
-        )
-
+        bar.pack(fill="x")
         bar.pack_propagate(False)
 
-        ctk.CTkLabel(
-            bar,
-            text="YUNA",
-            font=("Helvetica", 11, "bold"),
-            text_color=MUTED,
-        ).pack(
-            side="left",
-            padx=5,
-        )
+        # dots estilo game
+        for col in (RED, GOLD, GREEN):
+            ctk.CTkLabel(bar,
+                text="●", font=(F_BODY[0], 9),
+                text_color=col, width=16,
+            ).pack(side="left", padx=(6,0), pady=8)
 
-        ctk.CTkButton(
-            bar,
-            text="×",
-            width=30,
-            height=30,
-            corner_radius=15,
-            fg_color="transparent",
-            hover_color="#24171e",
+        ctk.CTkLabel(bar,
+            text="YUNA  v3.0",
+            font=(F_MONO[0], 9),
             text_color=MUTED,
-            font=("Helvetica", 18),
+        ).pack(side="left", padx=6)
+
+        ctk.CTkButton(bar,
+            text="✕",
+            width=30, height=30,
+            corner_radius=0,
+            fg_color="transparent",
+            hover_color="#2a0010",
+            text_color=MUTED,
+            font=(F_BODY[0], 12, "bold"),
             command=self.cerrar_yuna,
-        ).pack(
-            side="right"
+        ).pack(side="right")
+
+    # ── NAME TAG ─────────────────────────────────────────────
+    def _nametag(self):
+        wrap = ctk.CTkFrame(self.app,
+            fg_color=PANEL,
+            corner_radius=0,
+            border_width=2,
+            border_color=BLUE,
+            height=42,
         )
+        wrap.pack(fill="x", padx=10, pady=(8, 0))
+        wrap.pack_propagate(False)
 
-
-    # ========================================================
-    # IDENTITY
-    # ========================================================
-
-    def _build_identity(self):
-
-        identity = ctk.CTkFrame(
-            self.app,
-            fg_color="transparent",
-        )
-
-        identity.pack(
-            fill="x",
-            padx=28,
-            pady=(8, 0),
-        )
-
-        ctk.CTkLabel(
-            identity,
-            text="Yuna",
-            font=("Helvetica", 30, "bold"),
+        ctk.CTkLabel(wrap,
+            text="✦  YUNA",
+            font=(F_TITLE[0], 16, "bold"),
             text_color=TEXT,
-        ).pack(
-            side="left"
-        )
+        ).pack(side="left", padx=12)
 
-        ctk.CTkLabel(
-            identity,
-            text="✦",
-            font=("Helvetica", 19),
-            text_color=ACCENT,
-        ).pack(
-            side="right",
-            padx=4,
-        )
-
-
-    # ========================================================
-    # AVATAR
-    # ========================================================
-
-    def _build_avatar(self, img_path):
-
-        self.avatar_area = ctk.CTkFrame(
-            self.app,
-            fg_color=SURFACE,
-            corner_radius=30,
+        badge = ctk.CTkFrame(wrap,
+            fg_color=GOLD_BG,
+            corner_radius=4,
             border_width=1,
-            border_color=BORDER,
-            height=310,
+            border_color=GOLD,
         )
+        badge.pack(side="right", padx=10, pady=8)
 
-        self.avatar_area.pack(
-            fill="x",
-            padx=24,
-            pady=(22, 14),
+        ctk.CTkLabel(badge,
+            text=" LOCAL ",
+            font=(F_MONO[0], 9, "bold"),
+            text_color=GOLD,
+        ).pack(padx=4, pady=1)
+
+    # ── AVATAR CARD ──────────────────────────────────────────
+    def _avatar_card(self, img_path):
+        # panel con borde grueso estilo game dialog
+        outer = ctk.CTkFrame(self.app,
+            fg_color=BLUE_DIM,
+            corner_radius=8,
+            height=276,
         )
+        outer.pack(fill="x", padx=10, pady=(6, 0))
+        outer.pack_propagate(False)
 
-        self.avatar_area.pack_propagate(False)
+        inner = ctk.CTkFrame(outer,
+            fg_color=PANEL2,
+            corner_radius=6,
+        )
+        inner.pack(fill="both", expand=True, padx=3, pady=3)
 
         if not img_path:
-
-            ctk.CTkLabel(
-                self.avatar_area,
-                text="Y",
-                font=("Helvetica", 100, "bold"),
-                text_color=ACCENT,
-            ).pack(
-                expand=True
-            )
-
+            ctk.CTkLabel(inner,
+                text="?",
+                font=(F_TITLE[0], 80, "bold"),
+                text_color=BLUE,
+            ).pack(expand=True)
             return
 
         try:
-
             original = Image.open(img_path)
+            max_s = 240
+            ratio = min(max_s/original.width, max_s/original.height)
+            size = (max(1,int(original.width*ratio)), max(1,int(original.height*ratio)))
 
-            max_size = 270
-
-            ratio = min(
-                max_size / original.width,
-                max_size / original.height,
-            )
-
-            size = (
-                max(1, int(original.width * ratio)),
-                max(1, int(original.height * ratio)),
-            )
-
-            self.es_gif = img_path.lower().endswith(".gif")
-
-            if self.es_gif:
-
+            if img_path.lower().endswith(".gif"):
                 gif = Image.open(img_path)
-
                 try:
-
                     while True:
-
-                        frame = (
-                            gif.copy()
-                            .convert("RGBA")
-                            .resize(
-                                size,
-                                Image.LANCZOS,
-                            )
-                        )
-
-                        self.frames.append(
-                            ctk.CTkImage(
-                                frame,
-                                frame,
-                                size=size,
-                            )
-                        )
-
-                        gif.seek(
-                            gif.tell() + 1
-                        )
-
+                        f = gif.copy().convert("RGBA").resize(size, Image.LANCZOS)
+                        self.frames.append(ctk.CTkImage(f, f, size=size))
+                        gif.seek(gif.tell()+1)
                 except EOFError:
                     pass
-
                 if self.frames:
-
-                    self.label_img = ctk.CTkLabel(
-                        self.avatar_area,
-                        image=self.frames[0],
-                        text="",
-                        fg_color="transparent",
-                    )
-
-                    self.label_img.pack(
-                        expand=True
-                    )
-
+                    self.label_img = ctk.CTkLabel(inner, image=self.frames[0], text="", fg_color="transparent")
+                    self.label_img.pack(expand=True)
                     self.animar()
-
                     return
 
-            image = (
-                original
-                .convert("RGBA")
-                .resize(
-                    size,
-                    Image.LANCZOS,
-                )
-            )
-
-            photo = ctk.CTkImage(
-                image,
-                image,
-                size=size,
-            )
-
-            self.label_img = ctk.CTkLabel(
-                self.avatar_area,
-                image=photo,
-                text="",
-                fg_color="transparent",
-            )
-
-            self.label_img.pack(
-                expand=True
-            )
+            img = original.convert("RGBA").resize(size, Image.LANCZOS)
+            photo = ctk.CTkImage(img, img, size=size)
+            self.label_img = ctk.CTkLabel(inner, image=photo, text="", fg_color="transparent")
+            self.label_img.pack(expand=True)
 
         except Exception:
-
-            ctk.CTkLabel(
-                self.avatar_area,
-                text="Y",
-                font=("Helvetica", 100, "bold"),
-                text_color=ACCENT,
-            ).pack(
-                expand=True
-            )
-
+            ctk.CTkLabel(inner, text="?", font=(F_TITLE[0], 80, "bold"), text_color=BLUE).pack(expand=True)
 
     def animar(self):
-
         if not self.frames:
             return
+        self.frame_idx = (self.frame_idx + 1) % len(self.frames)
+        self.label_img.configure(image=self.frames[self.frame_idx])
+        self.app.after(80, self.animar)
 
-        self.frame_idx = (
-            self.frame_idx + 1
-        ) % len(self.frames)
-
-        self.label_img.configure(
-            image=self.frames[self.frame_idx]
+    # ── HP BAR (status) ──────────────────────────────────────
+    def _hp_bar(self):
+        wrap = ctk.CTkFrame(self.app,
+            fg_color=PANEL,
+            corner_radius=0,
+            border_width=1,
+            border_color=BORDER,
+            height=38,
         )
+        wrap.pack(fill="x", padx=10, pady=(4,0))
+        wrap.pack_propagate(False)
 
-        self.app.after(
-            80,
-            self.animar
+        # símbolo estado
+        self.sym_lbl = ctk.CTkLabel(wrap,
+            text="▶", font=(F_BODY[0], 10, "bold"),
+            text_color=GREEN, width=18,
         )
+        self.sym_lbl.pack(side="left", padx=(8,4))
 
-
-    # ========================================================
-    # STATUS
-    # ========================================================
-
-    def _build_status(self):
-
-        row = ctk.CTkFrame(
-            self.app,
-            fg_color="transparent",
-            height=28,
+        self.status_lbl = ctk.CTkLabel(wrap,
+            text="Lista",
+            font=(F_BODY[0], 10, "bold"),
+            text_color=GREEN, anchor="w",
         )
+        self.status_lbl.pack(side="left")
 
-        row.pack(
-            fill="x",
-            padx=30,
-            pady=(0, 18),
+        # barra HP
+        bar_bg = ctk.CTkFrame(wrap,
+            fg_color="#0a0a18",
+            corner_radius=3,
+            width=80, height=10,
+            border_width=1, border_color="#333355",
         )
+        bar_bg.pack(side="right", padx=10)
+        bar_bg.pack_propagate(False)
 
-        row.pack_propagate(False)
-
-        self.status_symbol = ctk.CTkLabel(
-            row,
-            text="●",
-            font=("Helvetica", 9, "bold"),
-            text_color=SUCCESS,
-            width=12,
+        self.hp_fill = ctk.CTkFrame(bar_bg,
+            fg_color=GREEN,
+            corner_radius=2,
+            width=76, height=8,
         )
-
-        self.status_symbol.pack(
-            side="left"
-        )
-
-        self.status_label = ctk.CTkLabel(
-            row,
-            text="Lista para ayudarte",
-            font=("Helvetica", 11),
-            text_color=TEXT_SECONDARY,
-            anchor="w",
-        )
-
-        self.status_label.pack(
-            side="left",
-            padx=(5, 0),
-        )
-
-        ctk.CTkLabel(
-            row,
-            text="Qwen",
-            font=("Helvetica", 9),
-            text_color=MUTED,
-        ).pack(
-            side="right"
-        )
+        self.hp_fill.place(x=2, y=1)
 
         self.set_status("ready")
 
-
     def set_status(self, state):
-
-        if state not in YUNA_STATES:
+        if state not in STATES:
             state = "ready"
-
-        config = YUNA_STATES[state]
-
         self.current_status = state
+        cfg = STATES[state]
+        if hasattr(self, "sym_lbl"):
+            self.sym_lbl.configure(text=cfg["sym"], text_color=cfg["col"])
+        if hasattr(self, "status_lbl"):
+            self.status_lbl.configure(text=cfg["txt"], text_color=cfg["col"])
+        if hasattr(self, "hp_fill"):
+            self.hp_fill.configure(fg_color=cfg["bar"])
 
-        if hasattr(self, "status_symbol"):
+    # ── ACTIONS ──────────────────────────────────────────────
+    def _actions(self):
+        # separador decorativo
+        sep = ctk.CTkFrame(self.app, fg_color=BORDER, corner_radius=0, height=1)
+        sep.pack(fill="x", padx=10, pady=(10,0))
 
-            self.status_symbol.configure(
-                text=config["symbol"],
-                text_color=config["color"],
-            )
-
-        if hasattr(self, "status_label"):
-
-            self.status_label.configure(
-                text=config["text"]
-            )
-
-
-    # ========================================================
-    # ACTIONS
-    # ========================================================
-
-    def _build_actions(self):
-
-        ctk.CTkLabel(
-            self.app,
-            text="ACCIONES",
-            font=("Helvetica", 9, "bold"),
+        ctk.CTkLabel(self.app,
+            text="▸ ACCIONES",
+            font=(F_BODY[0], 9, "bold"),
             text_color=MUTED,
             anchor="w",
-        ).pack(
-            fill="x",
-            padx=30,
-            pady=(0, 7),
+        ).pack(fill="x", padx=14, pady=(5,3))
+
+        wrap = ctk.CTkFrame(self.app, fg_color="transparent")
+        wrap.pack(fill="x", padx=10)
+
+        BTNS = [
+            ("◌", "CHAT",     "Conversación",              abrir_chat,       BLUE,  BLUE_BG,  BLUE_DIM),
+            ("◈", "AGENTE",   "Herramientas",              abrir_agente,     GOLD,  GOLD_BG,  GOLD_DIM),
+            ("✦", "APRENDER", "Memoria",                   abrir_aprendizaje,GREEN, "#0a1800", GREEN_DIM),
+        ]
+
+        for icon, label, sub, cmd, col, bg, bdr in BTNS:
+            self._game_btn(wrap, icon, label, sub, cmd, col, bg, bdr)
+
+    def _game_btn(self, parent, icon, label, sub, command, col, bg, bdr):
+        # efecto neo-skeuo: borde bottom/right más oscuro, top/left del color
+        outer = ctk.CTkFrame(parent,
+            fg_color=bdr,
+            corner_radius=6,
+            height=52,
         )
+        outer.pack(fill="x", pady=3)
+        outer.pack_propagate(False)
 
-        actions = ctk.CTkFrame(
-            self.app,
-            fg_color="transparent",
+        inner = ctk.CTkFrame(outer,
+            fg_color=bg,
+            corner_radius=5,
         )
+        inner.pack(fill="both", expand=True, padx=(2,3), pady=(2,3))
 
-        actions.pack(
-            fill="x",
-            padx=24,
-        )
-
-        self._button(
-            actions,
-            "◌",
-            "Chat",
-            "Hablar con Yuna",
-            abrir_chat,
-        )
-
-        self._button(
-            actions,
-            "◈",
-            "Agente",
-            "Herramientas y automatización",
-            abrir_agente,
-            accent=True,
-        )
-
-        self._button(
-            actions,
-            "✦",
-            "Aprender",
-            "Memoria y aprendizaje",
-            abrir_aprendizaje,
-        )
-
-
-    def _button(
-        self,
-        parent,
-        icon,
-        title,
-        subtitle,
-        command,
-        accent=False,
-    ):
-
-        normal = (
-            ACCENT_SOFT
-            if accent
-            else SURFACE
-        )
-
-        border = (
-            "#33244d"
-            if accent
-            else BORDER
-        )
-
-        frame = ctk.CTkFrame(
-            parent,
-            fg_color=normal,
-            corner_radius=18,
+        # icono
+        icon_box = ctk.CTkFrame(inner,
+            width=34, height=34,
+            corner_radius=6,
+            fg_color=BG,
             border_width=1,
-            border_color=border,
-            height=62,
+            border_color=bdr,
         )
-
-        frame.pack(
-            fill="x",
-            pady=5,
-        )
-
-        frame.pack_propagate(False)
-
-        icon_box = ctk.CTkFrame(
-            frame,
-            width=38,
-            height=38,
-            corner_radius=12,
-            fg_color=(
-                "#32204f"
-                if accent
-                else "#181820"
-            ),
-        )
-
-        icon_box.pack(
-            side="left",
-            padx=(10, 11),
-            pady=11,
-        )
-
+        icon_box.pack(side="left", padx=(8,8), pady=8)
         icon_box.pack_propagate(False)
+        ctk.CTkLabel(icon_box,
+            text=icon, font=(F_BODY[0], 14, "bold"),
+            text_color=col,
+        ).pack(expand=True)
 
-        ctk.CTkLabel(
-            icon_box,
-            text=icon,
-            font=("Helvetica", 17, "bold"),
-            text_color=(
-                ACCENT
-                if accent
-                else TEXT_SECONDARY
-            ),
-        ).pack(
-            expand=True
-        )
+        # texto
+        txt = ctk.CTkFrame(inner, fg_color="transparent")
+        txt.pack(side="left", fill="both", expand=True, pady=8)
+        ctk.CTkLabel(txt,
+            text=label, font=(F_BODY[0], 11, "bold"),
+            text_color=TEXT, anchor="w",
+        ).pack(fill="x")
+        ctk.CTkLabel(txt,
+            text=sub, font=(F_BODY[0], 9),
+            text_color=MUTED, anchor="w",
+        ).pack(fill="x")
 
-        text_frame = ctk.CTkFrame(
-            frame,
-            fg_color="transparent",
-        )
-
-        text_frame.pack(
-            side="left",
-            fill="both",
-            expand=True,
-            pady=9,
-        )
-
-        ctk.CTkLabel(
-            text_frame,
-            text=title,
-            font=("Helvetica", 11),
-            text_color=TEXT,
-            anchor="w",
-        ).pack(
-            fill="x"
-        )
-
-        ctk.CTkLabel(
-            text_frame,
-            text=subtitle,
-            font=("Helvetica", 9),
-            text_color=MUTED,
-            anchor="w",
-        ).pack(
-            fill="x",
-            pady=(2, 0),
-        )
-
-        ctk.CTkButton(
-            frame,
+        # botón ›
+        ctk.CTkButton(inner,
             text="›",
-            width=30,
-            height=30,
-            corner_radius=15,
-            fg_color=(
-                ACCENT
-                if accent
-                else "#1c1c26"
-            ),
-            hover_color=(
-                ACCENT_HOVER
-                if accent
-                else "#292934"
-            ),
-            text_color=TEXT,
-            font=("Helvetica", 18),
+            width=26, height=26,
+            corner_radius=5,
+            fg_color=BG,
+            hover_color=bdr,
+            border_width=1,
+            border_color=bdr,
+            text_color=col,
+            font=(F_BODY[0], 14, "bold"),
             command=command,
-        ).pack(
-            side="right",
-            padx=10,
+        ).pack(side="right", padx=8)
+
+    # ── FOOTER ───────────────────────────────────────────────
+    def _footer(self):
+        f = ctk.CTkFrame(self.app,
+            fg_color=PANEL2,
+            corner_radius=0,
+            height=24,
+            border_width=1,
+            border_color=BORDER,
         )
+        f.pack(fill="x", padx=10, pady=(8,10))
+        f.pack_propagate(False)
 
+        ctk.CTkLabel(f,
+            text="◆ OLLAMA  ◆ LOCAL  ◆ YUNA AI",
+            font=(F_MONO[0], 8),
+            text_color=MUTED,
+        ).pack(expand=True)
 
-    # ========================================================
-    # FOOTER
-    # ========================================================
-
-    def _build_footer(self):
-
-        footer = ctk.CTkFrame(
-            self.app,
-            fg_color="transparent",
-            height=32,
-        )
-
-        footer.pack(
-            fill="x",
-            padx=28,
-            pady=(13, 10),
-        )
-
-        footer.pack_propagate(False)
-
-        ctk.CTkLabel(
-            footer,
-            text="LOCAL  •  YUNA AI",
-            font=("Helvetica", 8),
-            text_color="#555160",
-        ).pack(
-            side="left"
-        )
-
-        ctk.CTkLabel(
-            footer,
-            text="●",
-            font=("Helvetica", 7),
-            text_color=SUCCESS,
-        ).pack(
-            side="right",
-            padx=4,
-        )
-
-
-    # ========================================================
-    # DRAG
-    # ========================================================
-
+    # ── DRAG ─────────────────────────────────────────────────
     def _start_drag(self, event):
-
         self._drag_x = event.x
         self._drag_y = event.y
 
-
     def _drag(self, event):
+        x = self.app.winfo_x() + event.x - self._drag_x
+        y = self.app.winfo_y() + event.y - self._drag_y
+        self.app.geometry(f"+{x}+{y}")
 
-        x = (
-            self.app.winfo_x()
-            + event.x
-            - self._drag_x
-        )
-
-        y = (
-            self.app.winfo_y()
-            + event.y
-            - self._drag_y
-        )
-
-        self.app.geometry(
-            f"+{x}+{y}"
-        )
-
-
-    # ========================================================
-    # CLOSE
-    # ========================================================
-
+    # ── CLOSE ────────────────────────────────────────────────
     def cerrar_yuna(self):
-
         cerrar_yuna()
-
         self.app.destroy()
-
-
-# ============================================================
-# ENTRY POINT
-# ============================================================
 
 def main():
     YunaAvatar()
-
 
 if __name__ == "__main__":
     main()
