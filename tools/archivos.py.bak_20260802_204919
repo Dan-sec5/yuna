@@ -7,38 +7,15 @@ from pathlib import Path
 from config.paths import resolve_location
 
 def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
-    """
-    Busca archivos recursivamente.
+    carpeta = str(resolve_location(carpeta))
 
-    Admite:
-    - patrones glob: *.py
-    - nombres: agent.py
-    - rutas relativas: core/executor.py
-    - rutas absolutas
-    - ubicaciones conocidas: home, descargas, yuna, etc.
-    """
-
-    carpeta_path = resolve_location(carpeta)
-
-    if not carpeta_path.exists():
+    if not os.path.exists(carpeta):
         return []
 
-    patron = str(patron).strip()
-
-    # --------------------------------------------------------
-    # Ruta explícita relativa dentro de la carpeta
-    # Ejemplo: core/executor.py + ~/yuna
-    # --------------------------------------------------------
-    ruta_relativa = carpeta_path / patron
-
-    if ruta_relativa.exists() and ruta_relativa.is_file():
-        resultados = [str(ruta_relativa.resolve())]
-
-    else:
-        resultados = glob.glob(
-            os.path.join(str(carpeta_path), "**", patron),
-            recursive=True
-        )
+    resultados = glob.glob(
+        os.path.join(carpeta, "**", patron),
+        recursive=True
+    )
 
     # Directorios internos que no deben considerarse parte
     # del árbol activo cuando se busca dentro de Yuna.

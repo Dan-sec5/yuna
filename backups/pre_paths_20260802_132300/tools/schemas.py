@@ -10,7 +10,7 @@ ALL_SCHEMAS: List[Dict] = [
                 "type": "object",
                 "properties": {
                     "patron": {"type": "string", "description": "Patrón glob, ej: *.xlsx"},
-                    "carpeta": {"type": "string", "description": "Carpeta exacta donde buscar. Para archivos dentro del proyecto Yuna usa SIEMPRE ~/yuna. Para descargas usa descargas. Para escritorio usa escritorio. No uses home para representar ~/yuna."},
+                    "carpeta": {"type": "string", "description": "Ruta base, ej: ~/Downloads"},
                 },
                 "required": ["patron"]
             }
@@ -41,7 +41,7 @@ ALL_SCHEMAS: List[Dict] = [
                 "properties": {
                     "carpeta": {
                         "type": "string",
-                        "description": "Ubicación a revisar: descargas, escritorio, documentos, imagenes o una ruta personalizada"
+                        "description": "Ruta a revisar, normalmente ~/Downloads"
                     },
                     "dias": {
                         "type": "integer",
@@ -60,7 +60,7 @@ ALL_SCHEMAS: List[Dict] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "carpeta_origen": {"type": "string", "description": "Ubicación a organizar: descargas, escritorio, documentos, imagenes o una ruta personalizada"},
+                    "carpeta_origen": {"type": "string", "description": "Carpeta a organizar"},
                 },
                 "required": ["carpeta_origen"]
             }

@@ -58,14 +58,6 @@ REGLAS DE UBICACIONES:
 4. No conviertas automáticamente una ubicación en otra.
 5. Si el usuario proporciona una ruta explícita, respétala.
 6. No describas Downloads como ubicación predeterminada del usuario.
-7. Una ruta explícita SIEMPRE debe conservarse literalmente.
-8. Nunca reemplaces una ruta explícita por una ubicación equivalente.
-9. "~/yuna" significa exactamente la carpeta raíz del proyecto Yuna.
-10. Si el usuario dice "~/yuna", debes enviar "~/yuna" como argumento "carpeta".
-11. Si el usuario proporciona una ruta como "~/yuna/core", "/tmp", "~/Proyectos"
-    o "~/Documents", NO la conviertas en "home", "documentos" ni otra ubicación.
-12. "home" solo debe usarse cuando el usuario diga explícitamente "home",
-    "mi carpeta personal", "directorio personal" o equivalente.
 
 REGLAS PARA ARCHIVOS:
 

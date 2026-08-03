@@ -10,7 +10,7 @@ ALL_SCHEMAS: List[Dict] = [
                 "type": "object",
                 "properties": {
                     "patron": {"type": "string", "description": "Patrón glob, ej: *.xlsx"},
-                    "carpeta": {"type": "string", "description": "Carpeta exacta donde buscar. Para archivos dentro del proyecto Yuna usa SIEMPRE ~/yuna. Para descargas usa descargas. Para escritorio usa escritorio. No uses home para representar ~/yuna."},
+                    "carpeta": {"type": "string", "description": "Ruta base, ej: ~/Downloads"},
                 },
                 "required": ["patron"]
             }
@@ -34,33 +34,12 @@ ALL_SCHEMAS: List[Dict] = [
     {
         "type": "function",
         "function": {
-            "name": "detectar_descargas",
-            "description": "Detecta archivos con evidencia de descarga de macOS en una carpeta durante los últimos N días",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "carpeta": {
-                        "type": "string",
-                        "description": "Ubicación a revisar: descargas, escritorio, documentos, imagenes o una ruta personalizada"
-                    },
-                    "dias": {
-                        "type": "integer",
-                        "description": "Número de días hacia atrás, default 30"
-                    }
-                },
-                "required": ["carpeta"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
             "name": "organizar_archivos",
             "description": "Organiza archivos por tipo en subcarpetas",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "carpeta_origen": {"type": "string", "description": "Ubicación a organizar: descargas, escritorio, documentos, imagenes o una ruta personalizada"},
+                    "carpeta_origen": {"type": "string", "description": "Carpeta a organizar"},
                 },
                 "required": ["carpeta_origen"]
             }

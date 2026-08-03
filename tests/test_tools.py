@@ -111,3 +111,16 @@ def test_detectar_descargas():
         assert "nombre" in item
         assert "ruta" in item
         assert "evidencia" in item
+
+def test_buscar_archivos_yuna_excluye_directorios_no_activos():
+    resultados = buscar_archivos("*.py", "~/yuna")
+
+    assert resultados
+
+    for ruta in resultados:
+        ruta_normalizada = ruta.replace("\\", "/")
+
+        assert "/backups/" not in ruta_normalizada
+        assert "/legacy/" not in ruta_normalizada
+        assert "/.git/" not in ruta_normalizada
+        assert "/__pycache__/" not in ruta_normalizada

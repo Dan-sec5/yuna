@@ -1,0 +1,36 @@
+{
+  "models": {
+    "agent": "qwen3:8b",
+    "chat": "qwen3:8b",
+    "fast": "qwen3:8b"
+  },
+  "ollama": {
+    "host": "http://localhost:11434",
+    "timeout": 120,
+    "stream": false,
+    "keep_alive": "30m"
+  },
+  "paths": {
+    "memory_db": "~/yuna/data/yuna.db",
+    "logs": "~/yuna/logs/",
+    "data_folder": "~/yuna/data/",
+    "memory_txt_legacy": "~/yuna/memoria.txt"
+  },
+  "permissions": {
+    "interactive": true,
+    "confirmations": true
+  },
+  "voice": {
+    "enabled": true,
+    "voice": "es-MX-DaliaNeural",
+    "max_chars": 300
+  },
+  "agent": {
+    "max_iterations": 5,
+    "temperature_plan": 0.2,
+    "temperature_execute": 0.4,
+    "context_window": 4096,
+    "parallel_tools": true,
+    "tool_cache_ttl": 300
+  }
+}

@@ -58,14 +58,6 @@ REGLAS DE UBICACIONES:
 4. No conviertas automáticamente una ubicación en otra.
 5. Si el usuario proporciona una ruta explícita, respétala.
 6. No describas Downloads como ubicación predeterminada del usuario.
-7. Una ruta explícita SIEMPRE debe conservarse literalmente.
-8. Nunca reemplaces una ruta explícita por una ubicación equivalente.
-9. "~/yuna" significa exactamente la carpeta raíz del proyecto Yuna.
-10. Si el usuario dice "~/yuna", debes enviar "~/yuna" como argumento "carpeta".
-11. Si el usuario proporciona una ruta como "~/yuna/core", "/tmp", "~/Proyectos"
-    o "~/Documents", NO la conviertas en "home", "documentos" ni otra ubicación.
-12. "home" solo debe usarse cuando el usuario diga explícitamente "home",
-    "mi carpeta personal", "directorio personal" o equivalente.
 
 REGLAS PARA ARCHIVOS:
 
@@ -411,286 +403,6 @@ class YunaAgent:
 
         return f"{name}: {texto}"
 
-    def _ejecutar_tool_loop(
-        self,
-        messages,
-        max_steps: int = 5
-    ):
-        """
-        Ejecuta el ciclo multi-step de tool calling.
-
-        Flujo:
-
-            LLM
-             ↓
-            tool call
-             ↓
-            Executor
-             ↓
-            resultado
-             ↓
-            LLM
-             ↓
-            siguiente decisión
-
-        El ciclo termina cuando:
-
-        - el LLM deja de solicitar herramientas
-        - se alcanza max_steps
-        - se detecta una llamada idéntica repetida
-        """
-
-        resultados_tools = []
-        tool_names = []
-
-        llamadas_vistas = set()
-
-        for step in range(max_steps):
-
-            logger.info(
-                f"Tool loop paso {step + 1}/{max_steps}"
-            )
-
-            response = chat_with_tools(
-                messages,
-                ALL_SCHEMAS,
-                model=MODEL_AGENT,
-                num_predict=400,
-                temperature=0.1
-            )
-
-            if response is None:
-                logger.error(
-                    "Tool loop: Ollama no devolvió respuesta"
-                )
-                return None, resultados_tools, tool_names
-
-            tool_calls = get_tool_calls(response)
-
-            print(
-                "[DEBUG TOOL CALLS]",
-                [
-                    {
-                        "name": call.get("name"),
-                        "arguments": call.get("arguments")
-                    }
-                    for call in tool_calls
-                ]
-            )
-
-            print(
-                f"[TOOL LOOP] step={step + 1} "
-                f"tool_calls={len(tool_calls)}"
-            )
-
-            # -------------------------------------------------
-            # No hay más herramientas
-            # -------------------------------------------------
-
-            if not tool_calls:
-                logger.info(
-                    "Tool loop finalizado: LLM no solicitó más tools"
-                )
-
-                # DEBUG: inspeccionar la respuesta final real de Ollama
-                print("\n========== RESPUESTA FINAL DEL TOOL LOOP ==========")
-                print("CONTENT:")
-                print(repr(getattr(response.message, "content", "")))
-                print("MESSAGE:")
-                print(response.message)
-                print("RESULTADOS TOOLS:")
-                print(resultados_tools)
-                print("===================================================\n")
-
-                return response, resultados_tools, tool_names
-
-            logger.info(
-                f"Tool calls detectados: {len(tool_calls)}"
-            )
-
-            # -------------------------------------------------
-            # PRESERVAR MENSAJE ASSISTANT + TOOL CALLS
-            # -------------------------------------------------
-            #
-            # Ollama devuelve los tool_calls dentro de
-            # response.message. Ese mensaje debe formar parte
-            # del contexto ANTES de enviar los resultados
-            # de las herramientas.
-            #
-            # Sin esto:
-            #
-            #   user -> assistant(tool_call) -> tool
-            #
-            # se convertía accidentalmente en:
-            #
-            #   user -> tool
-            #
-            # y Qwen podía interpretar el resultado como texto
-            # aislado y abandonar el ciclo multi-tool.
-            #
-            assistant_message = {
-                "role": "assistant",
-                "content": getattr(
-                    response.message,
-                    "content",
-                    ""
-                ) or "",
-                "tool_calls": [
-                    {
-                        "function": {
-                            "name": call["name"],
-                            "arguments": call["arguments"]
-                        }
-                    }
-                    for call in tool_calls
-                ]
-            }
-
-            messages.append(assistant_message)
-
-            logger.info(
-                "Mensaje assistant con %d tool_call(s) "
-                "agregado al contexto",
-                len(tool_calls)
-            )
-
-            llamadas_actuales = []
-
-            # -------------------------------------------------
-            # Validación de llamadas
-            # -------------------------------------------------
-
-            for call in tool_calls:
-
-                name = call.get("name", "")
-                args = call.get(
-                    "arguments",
-                    call.get("args", {})
-                )
-
-                if not isinstance(args, dict):
-                    args = {}
-
-                firma = (
-                    name,
-                    tuple(sorted(args.items()))
-                )
-
-                # ---------------------------------------------
-                # Protección contra loop infinito
-                # ---------------------------------------------
-
-                if firma in llamadas_vistas:
-
-                    logger.warning(
-                        f"Tool call repetido detectado: "
-                        f"{name}({args})"
-                    )
-
-                    mensaje = (
-                        f"Se detuvo el ciclo porque la herramienta "
-                        f"'{name}' fue solicitada nuevamente con "
-                        f"los mismos argumentos."
-                    )
-
-                    resultados_tools.append(mensaje)
-
-                    return (
-                        response,
-                        resultados_tools,
-                        tool_names
-                    )
-
-                llamadas_vistas.add(firma)
-                llamadas_actuales.append(call)
-
-            # -------------------------------------------------
-            # Ejecutar herramientas
-            # -------------------------------------------------
-
-            resultados = self.executor.execute_batch(
-                llamadas_actuales
-            )
-
-            mensajes_tool = []
-
-            for name, error, result in resultados:
-
-                tool_names.append(name)
-
-                if error:
-
-                    texto = (
-                        f"Error en {name}: {error}"
-                    )
-
-                    logger.error(texto)
-
-                    self.session_stats["success"] = False
-
-                    self.learner.record_lesson(
-                        messages[-1].get("content", ""),
-                        name,
-                        error,
-                        success=False
-                    )
-
-                else:
-
-                    texto = self._formatear_resultado_tool(
-                        name,
-                        result
-                    )
-
-                    logger.info(
-                        f"Tool {name} OK"
-                    )
-
-                    self.session_stats[
-                        "tools_used"
-                    ].append(name)
-
-                    self.learner.record_lesson(
-                        messages[-1].get("content", ""),
-                        name,
-                        str(result)[:200],
-                        success=True
-                    )
-
-                resultados_tools.append(texto)
-
-                # ---------------------------------------------
-                # Resultado vuelve al contexto del LLM
-                # ---------------------------------------------
-
-                mensajes_tool.append({
-                    "role": "tool",
-                    "name": name,
-                    "content": texto
-                })
-
-            messages.extend(mensajes_tool)
-
-        # -----------------------------------------------------
-        # Máximo de pasos alcanzado
-        # -----------------------------------------------------
-
-        logger.warning(
-            f"Tool loop detenido por límite de "
-            f"{max_steps} pasos"
-        )
-
-        resultados_tools.append(
-            "[TOOL_LOOP_LIMIT] "
-            f"Se alcanzó el máximo de {max_steps} pasos."
-        )
-
-        return (
-            None,
-            resultados_tools,
-            tool_names
-        )
-
     def process(self, user_input: str) -> str:
         start_time = time.time()
 
@@ -724,129 +436,67 @@ class YunaAgent:
             ctx_selector.append(msg)
         ctx_selector.append({"role": "user", "content": user_input})
 
-        # ---------------------------------------------------------
-        # TOOL LOOP MULTI-STEP
-        # ---------------------------------------------------------
-        #
-        # El agente puede ahora ejecutar varias herramientas
-        # de forma iterativa:
-        #
-        # Ollama -> Tool -> Resultado -> Ollama -> ...
-        #
-        # El executor continúa siendo el único componente autorizado
-        # para ejecutar herramientas.
-        # ---------------------------------------------------------
-
-        response, resultados_tools, tool_names = (
-            self._ejecutar_tool_loop(
-                ctx_selector,
-                max_steps=5
-            )
+        response = chat_with_tools(
+            ctx_selector, ALL_SCHEMAS,
+            model=MODEL_AGENT,
+            num_predict=200,
+            temperature=0.1
         )
-
+        tool_calls = get_tool_calls(response)
         contenido = clean_response(response)
 
-        if response is None:
-            logger.error(
-                "El tool loop no produjo respuesta de Ollama"
-            )
-
-            respuesta = (
-                "No pude completar la solicitud porque "
-                "el modelo no devolvió una respuesta válida."
-            )
-
-            self._guardar(
-                user_input,
-                respuesta,
-                direct=False
-            )
-
-            self._record_metrics(
-                start_time,
-                user_input,
-                respuesta,
-                tool_names,
-                False
-            )
-
+        if not tool_calls:
+            if "DIRECTO:" in contenido:
+                respuesta = contenido.split("DIRECTO:")[-1].strip()
+            else:
+                respuesta = _extraer_espanol(contenido) or contenido
+            self._guardar(user_input, respuesta, direct=True)
+            self._record_metrics(start_time, user_input, respuesta, [], True)
             return respuesta
+
+        resultados_tools = []
+        self.evaluator.reset()
+        if self.evaluator.should_continue(tool_calls, contenido):
+            resultados = self.executor.execute_batch(tool_calls)
+            for name, error, result in resultados:
+                if error:
+                    resultados_tools.append(f"Error en {name}: {error}")
+                    logger.error(f"Tool {name}: {error}")
+                    self.session_stats["success"] = False
+                    self.learner.record_lesson(user_input, name, error, success=False)
+                else:
+                    resultados_tools.append(
+                        self._formatear_resultado_tool(name, result)
+                    )
+                    logger.info(f"Tool {name} OK")
+                    self.session_stats["tools_used"].append(name)
+                    self.learner.record_lesson(user_input, name, str(result)[:200], success=True)
 
         # ---------------------------------------------------------
         # Respuestas deterministas para herramientas de archivos
         # ---------------------------------------------------------
-        #
-        # Si la cadena incluyó leer_texto, no debemos cortar aquí.
-        # En ese caso la respuesta final debe sintetizar TODOS los
-        # resultados obtenidos por las herramientas.
-        #
-        # Ejemplo:
-        #
-        # buscar_archivos -> leer_texto -> síntesis
-        #
-        # La respuesta determinista solamente se utiliza cuando
-        # buscar_archivos/listar_recientes/detectar_descargas
-        # fueron operaciones terminales.
-        # ---------------------------------------------------------
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # Si hubo múltiples herramientas, SIEMPRE sintetizamos
-        # usando todos los resultados obtenidos.
-        #
-        # Esto evita que una respuesta determinista de una herramienta
-        # terminal sobrescriba una cadena como:
-        #
-        # buscar_archivos -> leer_texto
-        #
-        # ---------------------------------------------------------
+        respuesta_determinista = _respuesta_archivos_determinista(
+            user_input,
+            resultados_tools
+        )
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # El tool loop ya devolvió una respuesta final de Qwen.
-        # Si contiene texto útil, conservarlo directamente.
-        #
-        # Esto evita ejecutar un segundo modelo que pueda perder
-        # contexto después de una cadena como:
-        #
-        # buscar_archivos -> leer_texto -> respuesta
-        #
-        # Solo usamos el sintetizador como fallback cuando Qwen
-        # terminó el tool loop sin producir contenido.
-        # ---------------------------------------------------------
+        if respuesta_determinista is not None:
+            respuesta = respuesta_determinista
 
-        if resultados_tools:
-            requiere_sintesis = "leer_texto" in tool_names
+            self._guardar(user_input, respuesta, direct=False)
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
 
-            if not requiere_sintesis:
-                respuesta_determinista = _respuesta_archivos_determinista(
-                    user_input,
-                    resultados_tools
-                )
-
-                if respuesta_determinista:
-                    respuesta = respuesta_determinista
-                    self._guardar(user_input, respuesta, direct=False)
-                    self._record_metrics(
-                        start_time,
-                        user_input,
-                        respuesta,
-                        self.session_stats["tools_used"],
-                        True
-                    )
-                    self._auto_evaluate(
-                        user_input,
-                        respuesta,
-                        resultados_tools
-                    )
-                    return respuesta
+            logger.info(f"Respuesta determinista: {respuesta[:80]}")
+            return respuesta
 
         datos = "\n".join(resultados_tools) if resultados_tools else "Sin datos"
-
         prompt = f"""PREGUNTA DEL USUARIO:
 {user_input}
 
@@ -858,19 +508,16 @@ Responde la pregunta usando exclusivamente los datos anteriores.
 Si los datos no contienen la información solicitada, dilo claramente.
 No completes información faltante con suposiciones.
 """
-
         ctx_sintesis = [
             {"role": "system", "content": SYSTEM_SINTETIZADOR},
             {"role": "user", "content": prompt}
         ]
-
         resp_final = chat_simple(
             ctx_sintesis,
             model=MODEL_CHAT,
             num_predict=150,
             temperature=0.3
         )
-
         respuesta = clean_response(resp_final)
         respuesta = _extraer_espanol(respuesta) or respuesta
 

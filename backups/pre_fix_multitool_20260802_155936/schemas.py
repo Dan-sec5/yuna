@@ -10,7 +10,7 @@ ALL_SCHEMAS: List[Dict] = [
                 "type": "object",
                 "properties": {
                     "patron": {"type": "string", "description": "Patrón glob, ej: *.xlsx"},
-                    "carpeta": {"type": "string", "description": "Carpeta exacta donde buscar. Para archivos dentro del proyecto Yuna usa SIEMPRE ~/yuna. Para descargas usa descargas. Para escritorio usa escritorio. No uses home para representar ~/yuna."},
+                    "carpeta": {"type": "string", "description": "Ubicación: descargas, escritorio, documentos, imagenes, home o una ruta personalizada"},
                 },
                 "required": ["patron"]
             }

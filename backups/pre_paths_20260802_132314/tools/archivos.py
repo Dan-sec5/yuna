@@ -4,62 +4,20 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from config.paths import resolve_location
+def buscar_archivos(patron: str = "*", carpeta: str = "~/Downloads") -> list:
+    carpeta = os.path.expanduser(carpeta)
 
-def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
-    """
-    Busca archivos recursivamente.
-
-    Admite:
-    - patrones glob: *.py
-    - nombres: agent.py
-    - rutas relativas: core/executor.py
-    - rutas absolutas
-    - ubicaciones conocidas: home, descargas, yuna, etc.
-    """
-
-    carpeta_path = resolve_location(carpeta)
-
-    if not carpeta_path.exists():
+    if not os.path.exists(carpeta):
         return []
 
-    patron = str(patron).strip()
-
-    # --------------------------------------------------------
-    # Ruta explícita relativa dentro de la carpeta
-    # Ejemplo: core/executor.py + ~/yuna
-    # --------------------------------------------------------
-    ruta_relativa = carpeta_path / patron
-
-    if ruta_relativa.exists() and ruta_relativa.is_file():
-        resultados = [str(ruta_relativa.resolve())]
-
-    else:
-        resultados = glob.glob(
-            os.path.join(str(carpeta_path), "**", patron),
-            recursive=True
-        )
-
-    # Directorios internos que no deben considerarse parte
-    # del árbol activo cuando se busca dentro de Yuna.
-    exclusiones_yuna = {
-        ".git",
-        "__pycache__",
-        "backups",
-        "legacy",
-    }
-
-    carpeta_resuelta = Path(carpeta).resolve()
+    resultados = glob.glob(
+        os.path.join(carpeta, "**", patron),
+        recursive=True
+    )
 
     resultados = [
         ruta for ruta in resultados
         if os.path.isfile(ruta)
-        and not (
-            carpeta_resuelta == Path.home() / "yuna"
-            and exclusiones_yuna.intersection(
-                Path(ruta).resolve().relative_to(carpeta_resuelta).parts
-            )
-        )
     ]
 
     return sorted(
@@ -68,8 +26,8 @@ def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
         reverse=True
     )
 
-def listar_recientes(carpeta: str = "home", dias: int = 7) -> list:
-    carpeta = str(resolve_location(carpeta))
+def listar_recientes(carpeta: str = "~/Downloads", dias: int = 7) -> list:
+    carpeta = os.path.expanduser(carpeta)
     dias = int(dias)
 
     if not os.path.exists(carpeta):
@@ -102,8 +60,8 @@ def listar_recientes(carpeta: str = "home", dias: int = 7) -> list:
         reverse=True
     )
 
-def organizar_por_tipo(carpeta_origen: str = "home") -> list:
-    carpeta = str(resolve_location(carpeta_origen))
+def organizar_por_tipo(carpeta_origen: str = "~/Downloads") -> list:
+    carpeta = os.path.expanduser(carpeta_origen)
     if not os.path.exists(carpeta):
         return ["Error: carpeta no existe"]
     destinos = {
@@ -150,7 +108,7 @@ def leer_texto(ruta: str) -> str:
         return f.read()
 
 
-def detectar_descargas(carpeta: str = "descargas", dias: int = 30) -> list:
+def detectar_descargas(carpeta: str = "~/Downloads", dias: int = 30) -> list:
     """
     Detecta archivos que presentan metadata de descarga de macOS.
 
@@ -163,7 +121,7 @@ def detectar_descargas(carpeta: str = "descargas", dias: int = 30) -> list:
     """
     import subprocess
 
-    carpeta = str(resolve_location(carpeta))
+    carpeta = os.path.expanduser(carpeta)
     dias = max(0, int(dias))
 
     if not os.path.exists(carpeta):

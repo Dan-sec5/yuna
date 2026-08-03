@@ -58,14 +58,6 @@ REGLAS DE UBICACIONES:
 4. No conviertas automáticamente una ubicación en otra.
 5. Si el usuario proporciona una ruta explícita, respétala.
 6. No describas Downloads como ubicación predeterminada del usuario.
-7. Una ruta explícita SIEMPRE debe conservarse literalmente.
-8. Nunca reemplaces una ruta explícita por una ubicación equivalente.
-9. "~/yuna" significa exactamente la carpeta raíz del proyecto Yuna.
-10. Si el usuario dice "~/yuna", debes enviar "~/yuna" como argumento "carpeta".
-11. Si el usuario proporciona una ruta como "~/yuna/core", "/tmp", "~/Proyectos"
-    o "~/Documents", NO la conviertas en "home", "documentos" ni otra ubicación.
-12. "home" solo debe usarse cuando el usuario diga explícitamente "home",
-    "mi carpeta personal", "directorio personal" o equivalente.
 
 REGLAS PARA ARCHIVOS:
 
@@ -468,17 +460,6 @@ class YunaAgent:
             tool_calls = get_tool_calls(response)
 
             print(
-                "[DEBUG TOOL CALLS]",
-                [
-                    {
-                        "name": call.get("name"),
-                        "arguments": call.get("arguments")
-                    }
-                    for call in tool_calls
-                ]
-            )
-
-            print(
                 f"[TOOL LOOP] step={step + 1} "
                 f"tool_calls={len(tool_calls)}"
             )
@@ -491,16 +472,6 @@ class YunaAgent:
                 logger.info(
                     "Tool loop finalizado: LLM no solicitó más tools"
                 )
-
-                # DEBUG: inspeccionar la respuesta final real de Ollama
-                print("\n========== RESPUESTA FINAL DEL TOOL LOOP ==========")
-                print("CONTENT:")
-                print(repr(getattr(response.message, "content", "")))
-                print("MESSAGE:")
-                print(response.message)
-                print("RESULTADOS TOOLS:")
-                print(resultados_tools)
-                print("===================================================\n")
 
                 return response, resultados_tools, tool_names
 
@@ -665,7 +636,7 @@ class YunaAgent:
 
                 mensajes_tool.append({
                     "role": "tool",
-                    "name": name,
+                    "tool_name": name,
                     "content": texto
                 })
 
@@ -789,19 +760,34 @@ class YunaAgent:
         # fueron operaciones terminales.
         # ---------------------------------------------------------
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # Si hubo múltiples herramientas, SIEMPRE sintetizamos
-        # usando todos los resultados obtenidos.
-        #
-        # Esto evita que una respuesta determinista de una herramienta
-        # terminal sobrescriba una cadena como:
-        #
-        # buscar_archivos -> leer_texto
-        #
-        # ---------------------------------------------------------
+        hay_leer_texto = any(
+            isinstance(item, str)
+            and item.startswith("leer_texto:")
+            for item in resultados_tools
+        )
+
+        if hay_leer_texto:
+            respuesta_determinista = None
+        else:
+            respuesta_determinista = _respuesta_archivos_determinista(
+                user_input,
+                resultados_tools
+            )
+
+        if respuesta_determinista is not None:
+            respuesta = respuesta_determinista
+
+            self._guardar(user_input, respuesta, direct=False)
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
+
+            logger.info(f"Respuesta determinista: {respuesta[:80]}")
+            return respuesta
 
         # ---------------------------------------------------------
         # SÍNTESIS FINAL
@@ -819,31 +805,27 @@ class YunaAgent:
         # terminó el tool loop sin producir contenido.
         # ---------------------------------------------------------
 
-        if resultados_tools:
-            requiere_sintesis = "leer_texto" in tool_names
+        if contenido:
+            respuesta = contenido
+            respuesta = _extraer_espanol(respuesta) or respuesta
 
-            if not requiere_sintesis:
-                respuesta_determinista = _respuesta_archivos_determinista(
-                    user_input,
-                    resultados_tools
-                )
-
-                if respuesta_determinista:
-                    respuesta = respuesta_determinista
-                    self._guardar(user_input, respuesta, direct=False)
-                    self._record_metrics(
-                        start_time,
-                        user_input,
-                        respuesta,
-                        self.session_stats["tools_used"],
-                        True
-                    )
-                    self._auto_evaluate(
-                        user_input,
-                        respuesta,
-                        resultados_tools
-                    )
-                    return respuesta
+            self._guardar(user_input, respuesta, direct=False)
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
+            self._auto_evaluate(
+                user_input,
+                respuesta,
+                resultados_tools
+            )
+            logger.info(
+                f"Respuesta directa del tool loop: {respuesta[:80]}"
+            )
+            return respuesta
 
         datos = "\n".join(resultados_tools) if resultados_tools else "Sin datos"
 

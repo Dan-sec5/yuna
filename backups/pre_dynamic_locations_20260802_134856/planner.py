@@ -20,27 +20,10 @@ SYSTEM_PROMPT = """Eres Yuna, agente IA personal de Luis.
 CONTEXTO:
 {context}
 
-UBICACIONES DEL USUARIO:
-
-Las ubicaciones del usuario son dinámicas y deben resolverse mediante
-el sistema central de rutas de Yuna.
-
-Alias disponibles:
-- home
-- descargas / downloads
-- escritorio / desktop
-- documentos / documents
-- imagenes / pictures
-- musica / music
-- videos / movies
-
-IMPORTANTE:
-- ~/yuna es exclusivamente la raíz interna de Yuna.
-- Downloads NO es la ubicación universal de trabajo.
-- No asumas que los archivos del usuario están en Downloads.
-- Si el usuario indica una ubicación, respétala exactamente.
-- Si el usuario utiliza un alias como "escritorio", debe utilizarse
-  ese alias como ubicación.
+RUTAS DEL SISTEMA:
+- Descargas: ~/Downloads
+- Reportes: ~/Desktop/Reportes
+- Datos Excel: ~/Desktop/Datos
 
 REGLAS ABSOLUTAS:
 

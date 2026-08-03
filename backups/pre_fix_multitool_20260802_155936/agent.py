@@ -58,14 +58,6 @@ REGLAS DE UBICACIONES:
 4. No conviertas automáticamente una ubicación en otra.
 5. Si el usuario proporciona una ruta explícita, respétala.
 6. No describas Downloads como ubicación predeterminada del usuario.
-7. Una ruta explícita SIEMPRE debe conservarse literalmente.
-8. Nunca reemplaces una ruta explícita por una ubicación equivalente.
-9. "~/yuna" significa exactamente la carpeta raíz del proyecto Yuna.
-10. Si el usuario dice "~/yuna", debes enviar "~/yuna" como argumento "carpeta".
-11. Si el usuario proporciona una ruta como "~/yuna/core", "/tmp", "~/Proyectos"
-    o "~/Documents", NO la conviertas en "home", "documentos" ni otra ubicación.
-12. "home" solo debe usarse cuando el usuario diga explícitamente "home",
-    "mi carpeta personal", "directorio personal" o equivalente.
 
 REGLAS PARA ARCHIVOS:
 
@@ -455,7 +447,7 @@ class YunaAgent:
                 messages,
                 ALL_SCHEMAS,
                 model=MODEL_AGENT,
-                num_predict=400,
+                num_predict=200,
                 temperature=0.1
             )
 
@@ -467,21 +459,29 @@ class YunaAgent:
 
             tool_calls = get_tool_calls(response)
 
-            print(
-                "[DEBUG TOOL CALLS]",
-                [
-                    {
-                        "name": call.get("name"),
-                        "arguments": call.get("arguments")
-                    }
-                    for call in tool_calls
-                ]
-            )
+            print("\n========== DEBUG TOOL LOOP ==========")
+            print("STEP:", step + 1)
+            print("RESPONSE TYPE:", type(response))
+            print("RESPONSE:", response)
+            print("TOOL CALLS:", tool_calls)
 
-            print(
-                f"[TOOL LOOP] step={step + 1} "
-                f"tool_calls={len(tool_calls)}"
-            )
+            if hasattr(response, "message"):
+                print("MESSAGE:", response.message)
+                print("MESSAGE TYPE:", type(response.message))
+                print(
+                    "MESSAGE CONTENT:",
+                    getattr(response.message, "content", None)
+                )
+                print(
+                    "MESSAGE TOOL CALLS:",
+                    getattr(response.message, "tool_calls", None)
+                )
+
+            print("MESSAGES ANTES DE AGREGAR TOOL:")
+            for i, msg in enumerate(messages):
+                print(i, msg)
+
+            print("=====================================\n")
 
             # -------------------------------------------------
             # No hay más herramientas
@@ -492,66 +492,10 @@ class YunaAgent:
                     "Tool loop finalizado: LLM no solicitó más tools"
                 )
 
-                # DEBUG: inspeccionar la respuesta final real de Ollama
-                print("\n========== RESPUESTA FINAL DEL TOOL LOOP ==========")
-                print("CONTENT:")
-                print(repr(getattr(response.message, "content", "")))
-                print("MESSAGE:")
-                print(response.message)
-                print("RESULTADOS TOOLS:")
-                print(resultados_tools)
-                print("===================================================\n")
-
                 return response, resultados_tools, tool_names
 
             logger.info(
                 f"Tool calls detectados: {len(tool_calls)}"
-            )
-
-            # -------------------------------------------------
-            # PRESERVAR MENSAJE ASSISTANT + TOOL CALLS
-            # -------------------------------------------------
-            #
-            # Ollama devuelve los tool_calls dentro de
-            # response.message. Ese mensaje debe formar parte
-            # del contexto ANTES de enviar los resultados
-            # de las herramientas.
-            #
-            # Sin esto:
-            #
-            #   user -> assistant(tool_call) -> tool
-            #
-            # se convertía accidentalmente en:
-            #
-            #   user -> tool
-            #
-            # y Qwen podía interpretar el resultado como texto
-            # aislado y abandonar el ciclo multi-tool.
-            #
-            assistant_message = {
-                "role": "assistant",
-                "content": getattr(
-                    response.message,
-                    "content",
-                    ""
-                ) or "",
-                "tool_calls": [
-                    {
-                        "function": {
-                            "name": call["name"],
-                            "arguments": call["arguments"]
-                        }
-                    }
-                    for call in tool_calls
-                ]
-            }
-
-            messages.append(assistant_message)
-
-            logger.info(
-                "Mensaje assistant con %d tool_call(s) "
-                "agregado al contexto",
-                len(tool_calls)
             )
 
             llamadas_actuales = []
@@ -665,7 +609,6 @@ class YunaAgent:
 
                 mensajes_tool.append({
                     "role": "tool",
-                    "name": name,
                     "content": texto
                 })
 
@@ -775,78 +718,28 @@ class YunaAgent:
         # ---------------------------------------------------------
         # Respuestas deterministas para herramientas de archivos
         # ---------------------------------------------------------
-        #
-        # Si la cadena incluyó leer_texto, no debemos cortar aquí.
-        # En ese caso la respuesta final debe sintetizar TODOS los
-        # resultados obtenidos por las herramientas.
-        #
-        # Ejemplo:
-        #
-        # buscar_archivos -> leer_texto -> síntesis
-        #
-        # La respuesta determinista solamente se utiliza cuando
-        # buscar_archivos/listar_recientes/detectar_descargas
-        # fueron operaciones terminales.
-        # ---------------------------------------------------------
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # Si hubo múltiples herramientas, SIEMPRE sintetizamos
-        # usando todos los resultados obtenidos.
-        #
-        # Esto evita que una respuesta determinista de una herramienta
-        # terminal sobrescriba una cadena como:
-        #
-        # buscar_archivos -> leer_texto
-        #
-        # ---------------------------------------------------------
+        respuesta_determinista = _respuesta_archivos_determinista(
+            user_input,
+            resultados_tools
+        )
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # El tool loop ya devolvió una respuesta final de Qwen.
-        # Si contiene texto útil, conservarlo directamente.
-        #
-        # Esto evita ejecutar un segundo modelo que pueda perder
-        # contexto después de una cadena como:
-        #
-        # buscar_archivos -> leer_texto -> respuesta
-        #
-        # Solo usamos el sintetizador como fallback cuando Qwen
-        # terminó el tool loop sin producir contenido.
-        # ---------------------------------------------------------
+        if respuesta_determinista is not None:
+            respuesta = respuesta_determinista
 
-        if resultados_tools:
-            requiere_sintesis = "leer_texto" in tool_names
+            self._guardar(user_input, respuesta, direct=False)
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
 
-            if not requiere_sintesis:
-                respuesta_determinista = _respuesta_archivos_determinista(
-                    user_input,
-                    resultados_tools
-                )
-
-                if respuesta_determinista:
-                    respuesta = respuesta_determinista
-                    self._guardar(user_input, respuesta, direct=False)
-                    self._record_metrics(
-                        start_time,
-                        user_input,
-                        respuesta,
-                        self.session_stats["tools_used"],
-                        True
-                    )
-                    self._auto_evaluate(
-                        user_input,
-                        respuesta,
-                        resultados_tools
-                    )
-                    return respuesta
+            logger.info(f"Respuesta determinista: {respuesta[:80]}")
+            return respuesta
 
         datos = "\n".join(resultados_tools) if resultados_tools else "Sin datos"
-
         prompt = f"""PREGUNTA DEL USUARIO:
 {user_input}
 
@@ -858,19 +751,16 @@ Responde la pregunta usando exclusivamente los datos anteriores.
 Si los datos no contienen la información solicitada, dilo claramente.
 No completes información faltante con suposiciones.
 """
-
         ctx_sintesis = [
             {"role": "system", "content": SYSTEM_SINTETIZADOR},
             {"role": "user", "content": prompt}
         ]
-
         resp_final = chat_simple(
             ctx_sintesis,
             model=MODEL_CHAT,
             num_predict=150,
             temperature=0.3
         )
-
         respuesta = clean_response(resp_final)
         respuesta = _extraer_espanol(respuesta) or respuesta
 
