@@ -1,7 +1,6 @@
 """
 core/agent.py — Agente Yuna V4 con auto-mejora
 """
-import ast
 import re
 import json
 import time
@@ -541,196 +540,12 @@ def _detectar_lectura_archivo(user_input: str):
     return ruta
 
 
-
-
-def _extraer_bloque_codigo(
-    contenido: str,
-    nombre: str,
-    tipo: str = "funcion"
-) -> str | None:
-    """
-    Extrae de forma determinista una función, método o clase
-    desde código Python usando AST.
-
-    El LLM no decide qué bloque analizar.
-    Python identifica primero el bloque exacto.
-    """
-
-    # Normalizar el tipo para aceptar variantes con acentos
-    # o llamadas que envíen None.
-    tipo = (tipo or "funcion").strip().lower()
-    tipo = (
-        tipo
-        .replace("ó", "o")
-        .replace("é", "e")
-    )
-
-
-
-    if not contenido or not nombre:
-        return None
-
-    try:
-        tree = ast.parse(contenido)
-
-    except (SyntaxError, ValueError, TypeError) as e:
-        logger.warning(
-            f"No se pudo analizar código Python: {e}"
-        )
-        return None
-
-    candidatos = []
-
-    for nodo in ast.walk(tree):
-
-        if tipo in {"funcion", "metodo"}:
-
-            if isinstance(
-                nodo,
-                (ast.FunctionDef, ast.AsyncFunctionDef)
-            ):
-                if nodo.name == nombre:
-                    candidatos.append(nodo)
-
-        elif tipo == "clase":
-
-            if isinstance(nodo, ast.ClassDef):
-                if nodo.name == nombre:
-                    candidatos.append(nodo)
-
-    if not candidatos:
-        return None
-
-    nodo = candidatos[0]
-
-    inicio = getattr(nodo, "lineno", None)
-    fin = getattr(nodo, "end_lineno", None)
-
-    if inicio is None or fin is None:
-        return None
-
-    lineas = contenido.splitlines()
-
-    bloque = "\n".join(
-        lineas[inicio - 1:fin]
-    )
-
-    return bloque.strip() or None
-
-
-def _es_seguimiento_lectura(pregunta: str) -> bool:
-    """
-    Detecta preguntas que probablemente continúan el análisis
-    del último archivo leído en la sesión.
-    """
-    if not pregunta:
-        return False
-
-    texto = pregunta.lower()
-
-    referencias = (
-        "archivo",
-        "función",
-        "funcion",
-        "método",
-        "metodo",
-        "clase",
-        "process",
-        "código",
-        "codigo",
-    )
-
-    seguimiento = (
-        "después",
-        "despues",
-        "antes",
-        "luego",
-        "posterior",
-        "anterior",
-        "qué hace",
-        "que hace",
-        "cómo funciona",
-        "como funciona",
-        "cuáles son",
-        "cuales son",
-        "qué ocurre",
-        "que ocurre",
-    )
-
-    tiene_referencia = any(x in texto for x in referencias)
-    es_seguimiento = any(x in texto for x in seguimiento)
-
-    return tiene_referencia or es_seguimiento
-
-
-def _extraer_nombre_elemento_codigo(
-    pregunta: str
-) -> tuple[str | None, str | None]:
-    """
-    Detecta consultas sobre funciones, métodos o clases.
-
-    Ejemplos reconocidos:
-
-        función process
-        funcion process
-        método process
-        metodo process
-        def process
-        clase YunaAgent
-
-    Devuelve:
-
-        (nombre, tipo)
-
-    """
-
-    if not pregunta:
-        return None, None
-
-    patrones = [
-        (
-            r"\bfunci[oó]n\s+([A-Za-z_][A-Za-z0-9_]*)",
-            "funcion"
-        ),
-        (
-            r"\bm[eé]todo\s+([A-Za-z_][A-Za-z0-9_]*)",
-            "metodo"
-        ),
-        (
-            r"\bdef\s+([A-Za-z_][A-Za-z0-9_]*)",
-            "funcion"
-        ),
-        (
-            r"\bclase\s+([A-Za-z_][A-Za-z0-9_]*)",
-            "clase"
-        ),
-    ]
-
-    for patron, tipo in patrones:
-
-        match = re.search(
-            patron,
-            pregunta,
-            re.IGNORECASE
-        )
-
-        if match:
-            return match.group(1), tipo
-
-    return None, None
-
-
 class YunaAgent:
     def __init__(self, confirm_callback=None):
         self.executor = ToolExecutor(confirm_callback)
         self.evaluator = ResultEvaluator(max_iterations=5)
         self.learner = LearningEngine()
         self.history = []
-
-        # Contexto de la última lectura de archivo durante la sesión.
-        # Permite responder preguntas de seguimiento sin repetir la ruta.
-        self._ultima_lectura = None
-
         self.session_stats = {"tools_used": [], "success": True, "latency": 0}
 
     @staticmethod
@@ -1053,45 +868,15 @@ class YunaAgent:
 
         ruta_lectura = _detectar_lectura_archivo(user_input)
 
-        # ---------------------------------------------------------
-        # REUTILIZAR ÚLTIMA LECTURA
-        # ---------------------------------------------------------
-        #
-        # Si la pregunta no contiene nuevamente la ruta pero parece
-        # continuar el análisis anterior, reutilizamos el archivo
-        # que ya fue leído durante esta sesión.
-        #
-        reutilizar_lectura = False
-        texto_archivo = None
-
-        if (
-            not ruta_lectura
-            and self._ultima_lectura
-            and _es_seguimiento_lectura(user_input)
-        ):
-            ruta_lectura = self._ultima_lectura["ruta"]
-            texto_archivo = self._ultima_lectura["contenido"]
-            reutilizar_lectura = True
-
+        if ruta_lectura:
             logger.info(
-                "Router determinista -> reutilizando última lectura "
-                f"({ruta_lectura})"
+                f"Router determinista -> leer_texto({ruta_lectura})"
             )
 
-        if ruta_lectura:
-
-            if reutilizar_lectura:
-                error = None
-                resultado = texto_archivo
-            else:
-                logger.info(
-                    f"Router determinista -> leer_texto({ruta_lectura})"
-                )
-
-                error, resultado = self.executor.execute(
-                    "leer_texto",
-                    {"ruta": ruta_lectura}
-                )
+            error, resultado = self.executor.execute(
+                "leer_texto",
+                {"ruta": ruta_lectura}
+            )
 
             if error:
                 logger.error(
@@ -1121,13 +906,6 @@ class YunaAgent:
 
             texto_archivo = str(resultado)
 
-            # Conservar la lectura para preguntas de seguimiento
-            # dentro de la misma sesión.
-            self._ultima_lectura = {
-                "ruta": ruta_lectura,
-                "contenido": texto_archivo,
-            }
-
             self.session_stats["tools_used"].append(
                 "leer_texto"
             )
@@ -1145,56 +923,6 @@ class YunaAgent:
             MAX_CONTENIDO_ANALISIS = 30000
 
             contenido_para_llm = texto_archivo
-
-            # -------------------------------------------------
-            # EXTRACCIÓN DETERMINISTA DE CÓDIGO
-            # -------------------------------------------------
-            #
-            # Si el usuario solicita una función, método o clase
-            # concreta, Python localiza primero el bloque exacto.
-            #
-            # El LLM recibe el bloque relevante, no el archivo
-            # completo.
-            #
-            # Esto evita respuestas como:
-            #
-            #   {contenido_para_llm}
-            #   {user_input}
-            #
-            # y evita que Qwen tenga que localizar código dentro
-            # de cientos o miles de líneas.
-            # -------------------------------------------------
-
-            nombre_elemento, tipo_elemento = (
-                _extraer_nombre_elemento_codigo(
-                    user_input
-                )
-            )
-
-            if nombre_elemento:
-
-                bloque = _extraer_bloque_codigo(
-                    texto_archivo,
-                    nombre_elemento,
-                    tipo=tipo_elemento
-                )
-
-                if bloque:
-
-                    contenido_para_llm = (
-                        f"ELEMENTO SOLICITADO: "
-                        f"{tipo_elemento} "
-                        f"{nombre_elemento}\n\n"
-                        f"CÓDIGO REAL EXTRAÍDO DEL ARCHIVO:\n"
-                        f"```python\n"
-                        f"{bloque}\n"
-                        f"```"
-                    )
-
-                    logger.info(
-                        "Código extraído para análisis: "
-                        f"{tipo_elemento} {nombre_elemento}"
-                    )
 
             if len(contenido_para_llm) > MAX_CONTENIDO_ANALISIS:
                 contenido_para_llm = (

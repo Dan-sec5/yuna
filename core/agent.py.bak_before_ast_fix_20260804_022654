@@ -1,7 +1,6 @@
 """
 core/agent.py — Agente Yuna V4 con auto-mejora
 """
-import ast
 import re
 import json
 import time
@@ -556,17 +555,6 @@ def _extraer_bloque_codigo(
     Python identifica primero el bloque exacto.
     """
 
-    # Normalizar el tipo para aceptar variantes con acentos
-    # o llamadas que envíen None.
-    tipo = (tipo or "funcion").strip().lower()
-    tipo = (
-        tipo
-        .replace("ó", "o")
-        .replace("é", "e")
-    )
-
-
-
     if not contenido or not nombre:
         return None
 
@@ -616,51 +604,6 @@ def _extraer_bloque_codigo(
     )
 
     return bloque.strip() or None
-
-
-def _es_seguimiento_lectura(pregunta: str) -> bool:
-    """
-    Detecta preguntas que probablemente continúan el análisis
-    del último archivo leído en la sesión.
-    """
-    if not pregunta:
-        return False
-
-    texto = pregunta.lower()
-
-    referencias = (
-        "archivo",
-        "función",
-        "funcion",
-        "método",
-        "metodo",
-        "clase",
-        "process",
-        "código",
-        "codigo",
-    )
-
-    seguimiento = (
-        "después",
-        "despues",
-        "antes",
-        "luego",
-        "posterior",
-        "anterior",
-        "qué hace",
-        "que hace",
-        "cómo funciona",
-        "como funciona",
-        "cuáles son",
-        "cuales son",
-        "qué ocurre",
-        "que ocurre",
-    )
-
-    tiene_referencia = any(x in texto for x in referencias)
-    es_seguimiento = any(x in texto for x in seguimiento)
-
-    return tiene_referencia or es_seguimiento
 
 
 def _extraer_nombre_elemento_codigo(
@@ -726,11 +669,6 @@ class YunaAgent:
         self.evaluator = ResultEvaluator(max_iterations=5)
         self.learner = LearningEngine()
         self.history = []
-
-        # Contexto de la última lectura de archivo durante la sesión.
-        # Permite responder preguntas de seguimiento sin repetir la ruta.
-        self._ultima_lectura = None
-
         self.session_stats = {"tools_used": [], "success": True, "latency": 0}
 
     @staticmethod
@@ -1053,45 +991,15 @@ class YunaAgent:
 
         ruta_lectura = _detectar_lectura_archivo(user_input)
 
-        # ---------------------------------------------------------
-        # REUTILIZAR ÚLTIMA LECTURA
-        # ---------------------------------------------------------
-        #
-        # Si la pregunta no contiene nuevamente la ruta pero parece
-        # continuar el análisis anterior, reutilizamos el archivo
-        # que ya fue leído durante esta sesión.
-        #
-        reutilizar_lectura = False
-        texto_archivo = None
-
-        if (
-            not ruta_lectura
-            and self._ultima_lectura
-            and _es_seguimiento_lectura(user_input)
-        ):
-            ruta_lectura = self._ultima_lectura["ruta"]
-            texto_archivo = self._ultima_lectura["contenido"]
-            reutilizar_lectura = True
-
+        if ruta_lectura:
             logger.info(
-                "Router determinista -> reutilizando última lectura "
-                f"({ruta_lectura})"
+                f"Router determinista -> leer_texto({ruta_lectura})"
             )
 
-        if ruta_lectura:
-
-            if reutilizar_lectura:
-                error = None
-                resultado = texto_archivo
-            else:
-                logger.info(
-                    f"Router determinista -> leer_texto({ruta_lectura})"
-                )
-
-                error, resultado = self.executor.execute(
-                    "leer_texto",
-                    {"ruta": ruta_lectura}
-                )
+            error, resultado = self.executor.execute(
+                "leer_texto",
+                {"ruta": ruta_lectura}
+            )
 
             if error:
                 logger.error(
@@ -1120,13 +1028,6 @@ class YunaAgent:
                 return respuesta
 
             texto_archivo = str(resultado)
-
-            # Conservar la lectura para preguntas de seguimiento
-            # dentro de la misma sesión.
-            self._ultima_lectura = {
-                "ruta": ruta_lectura,
-                "contenido": texto_archivo,
-            }
 
             self.session_stats["tools_used"].append(
                 "leer_texto"
