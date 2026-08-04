@@ -49,7 +49,7 @@ def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
         "legacy",
     }
 
-    carpeta_resuelta = carpeta_path.resolve()
+    carpeta_resuelta = Path(carpeta).resolve()
 
     resultados = [
         ruta for ruta in resultados

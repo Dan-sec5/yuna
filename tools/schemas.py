@@ -112,7 +112,12 @@ ALL_SCHEMAS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "leer_texto",
-            "description": "Lee un archivo de texto plano",
+            "description": (
+    "Lee el contenido completo de un archivo de texto plano. "
+    "Usar cuando el usuario pida leer, revisar, analizar, mostrar "
+    "o explicar el contenido de un archivo. Si el usuario proporciona "
+    "una ruta explícita, usar exactamente esa ruta."
+),
             "parameters": {
                 "type": "object",
                 "properties": {

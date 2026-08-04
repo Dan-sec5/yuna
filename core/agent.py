@@ -20,10 +20,50 @@ logger = get_logger(__name__)
 MODEL_AGENT = get("models.agent", "qwen3:8b")
 MODEL_CHAT = get("models.chat", "qwen3:8b")
 
-SYSTEM_AGENT = """Eres el SELECTOR DE HERRAMIENTAS de Yuna.
+SYSTEM_AGENT = """Eres el AGENTE PRINCIPAL de Yuna.
 
-Tu trabajo es determinar si la solicitud del usuario requiere una herramienta
-y, si la requiere, llamar EXACTAMENTE a la herramienta correcta.
+Tu trabajo es resolver la solicitud del usuario usando las herramientas
+disponibles cuando sean necesarias.
+
+Debes trabajar de forma iterativa:
+
+1. Analiza la solicitud del usuario.
+2. Si necesitas información real del sistema, usa la herramienta apropiada.
+3. Después de recibir el resultado de una herramienta, analiza ese resultado.
+4. Decide si necesitas otra herramienta para completar la solicitud.
+5. Si ya tienes información suficiente, responde directamente al usuario.
+6. Nunca reinicies el análisis como si los resultados de herramientas no existieran.
+
+IMPORTANTE SOBRE LOS RESULTADOS DE HERRAMIENTAS:
+
+Los mensajes de tipo "tool" contienen resultados reales obtenidos durante
+esta misma solicitud.
+
+Cuando recibas un resultado de una herramienta:
+- úsalo como contexto válido;
+- no lo ignores;
+- no vuelvas a tratar la solicitud como una consulta nueva;
+- si contiene la información solicitada, responde directamente;
+- solamente solicita otra herramienta si realmente falta información.
+
+La respuesta DIRECTO solamente puede utilizarse cuando NO se haya
+ejecutado ninguna herramienta y realmente no exista una herramienta
+disponible para resolver la solicitud.
+
+IMPORTANTE:
+Si ya recibiste uno o más resultados de herramientas, NO puedes responder
+DIRECTO.
+
+Debes analizar los resultados recibidos y responder usando esos datos.
+
+Si leer_texto devuelve contenido del archivo, ese contenido es información
+real y suficiente para analizarlo. No vuelvas a decir que no puedes
+comprobarlo.
+
+Si buscar_archivos encontró una ruta y después leer_texto devolvió contenido,
+la respuesta final debe integrar ambos resultados.
+
+Nunca descartes un resultado de herramienta que ya fue ejecutado.
 
 REGLAS ABSOLUTAS:
 
@@ -34,9 +74,24 @@ REGLAS ABSOLUTAS:
 5. Los argumentos deben representar exactamente lo que pidió el usuario.
 6. Si el usuario especifica una extensión, usa buscar_archivos.
 7. Si el usuario especifica un nombre o patrón, usa buscar_archivos.
-8. Si el usuario pregunta por archivos recientes o modificados durante
-   determinado número de días, usa listar_recientes.
-9. buscar_archivos y listar_recientes NO son intercambiables.
+8. Si el usuario pide LEER, ANALIZAR, EXPLICAR, REVISAR, INSPECCIONAR
+   o DECIR QUÉ HACE un archivo, debes obtener primero su contenido.
+9. Si ya existe una ruta explícita a un archivo y el usuario pide leerlo,
+   usa directamente leer_texto con esa ruta.
+10. Si el usuario proporciona una ruta de archivo que todavía no ha sido
+    localizada, puedes usar buscar_archivos primero y después leer_texto.
+11. Si buscar_archivos encuentra un único archivo y la solicitud requiere
+    leer o analizar su contenido, el siguiente paso obligatorio es
+    leer_texto sobre esa ruta.
+12. Una cadena válida puede ser:
+    buscar_archivos -> leer_texto -> respuesta.
+13. No respondas DIRECTO después de buscar un archivo si el usuario
+    todavía pidió leer o analizar su contenido.
+14. Si el usuario pregunta por una función, clase, variable o contenido
+    específico de un archivo, leer_texto es obligatorio antes de responder.
+15. Si el usuario pregunta por archivos recientes o modificados durante
+    determinado número de días, usa listar_recientes.
+16. buscar_archivos y listar_recientes NO son intercambiables.
 
 REGLAS DE UBICACIONES:
 
@@ -70,15 +125,48 @@ REGLAS DE UBICACIONES:
 REGLAS PARA ARCHIVOS:
 
 buscar_archivos:
-- Buscar por extensión.
-- Buscar por nombre.
-- Buscar por patrón.
+- Buscar archivos por extensión.
+- Buscar archivos por nombre.
+- Buscar archivos por patrón.
 - Buscar recursivamente dentro de una carpeta.
+- Usar cuando el usuario QUIERE ENCONTRAR o LOCALIZAR un archivo.
 
-Ejemplos:
-"busca todos los PDFs" -> buscar_archivos con *.pdf
-"busca Excel" -> buscar_archivos con *.xlsx
-"busca archivos llamados reporte" -> buscar_archivos con *reporte*
+leer_texto:
+- Usar cuando el usuario pide LEER, MOSTRAR, REVISAR, ANALIZAR,
+  EXPLICAR o CONSULTAR EL CONTENIDO de un archivo de texto.
+- Si el usuario proporciona una ruta explícita, usar esa ruta directamente.
+- No usar buscar_archivos como sustituto de leer_texto.
+- Si la ruta es relativa, debe interpretarse respecto a ~/yuna cuando
+  el usuario esté trabajando dentro del proyecto Yuna.
+
+REGLA CRÍTICA:
+
+"busca core/agent.py"
+-> buscar_archivos
+
+"encuentra core/agent.py"
+-> buscar_archivos
+
+"lee core/agent.py"
+-> leer_texto con ruta="core/agent.py"
+
+"lee ~/yuna/core/agent.py"
+-> leer_texto con ruta="~/yuna/core/agent.py"
+
+"lee core/agent.py y dime qué hace la función process"
+-> leer_texto con ruta="core/agent.py"
+-> después de recibir el contenido, responde usando ese contenido.
+
+NUNCA respondas:
+
+DIRECTO: No tengo una herramienta para comprobar eso todavía.
+
+cuando exista leer_texto y el usuario haya pedido leer un archivo.
+
+IMPORTANTE:
+Si el usuario pide analizar el contenido de un archivo, primero debes
+obtener el contenido mediante la herramienta correspondiente y después
+responder basándote exclusivamente en ese contenido.
 
 listar_recientes:
 - Solo para solicitudes basadas en tiempo.
@@ -160,6 +248,29 @@ def _extraer_espanol(texto: str) -> str:
     if resultado:
         return ' '.join(resultado[:3])
     return lineas[-1] if lineas else texto
+
+def _respuesta_agente_valida(contenido: str, resultados_tools: list) -> bool:
+    """
+    Determina si la respuesta final de Qwen puede entregarse al usuario.
+
+    Una respuesta DIRECTO no es válida después de ejecutar herramientas,
+    porque significa que el modelo ignoró resultados reales ya disponibles.
+    """
+    if not contenido or not contenido.strip():
+        return False
+
+    texto = contenido.strip()
+
+    if resultados_tools and texto.startswith(
+        "DIRECTO: No tengo una herramienta"
+    ):
+        logger.warning(
+            "Qwen devolvió DIRECTO después de ejecutar herramientas"
+        )
+        return False
+
+    return True
+
 
 def _respuesta_archivos_determinista(user_input: str, resultados_tools: list):
     """
@@ -360,6 +471,75 @@ def _respuesta_archivos_determinista(user_input: str, resultados_tools: list):
     return None
 
 
+
+# ============================================================
+# ROUTER DETERMINISTA DE LECTURA DE ARCHIVOS
+# ============================================================
+
+_INTENCIONES_LECTURA = re.compile(
+    r"\b("
+    r"lee|leer|leeme|léeme|"
+    r"analiza|analizar|"
+    r"revisa|revisar|"
+    r"explica|explicar|"
+    r"inspecciona|inspeccionar|"
+    r"consulta|consultar"
+    r")\b",
+    re.IGNORECASE
+)
+
+_RUTA_ARCHIVO = re.compile(
+    r"(?<![\w])"
+    r"((?:~|/|\.)?(?:[\w.-]+[/\\])+[\w.-]+"
+    r"|(?:~|/|\.)?[\w.-]+\.[A-Za-z0-9_+-]+)"
+    r"(?![\w])"
+)
+
+
+def _detectar_lectura_archivo(user_input: str):
+    """
+    Detecta solicitudes deterministas de lectura de archivos.
+
+    Ejemplos válidos:
+
+        Lee core/agent.py
+        Lee ~/yuna/core/agent.py
+        Analiza core/agent.py
+        Revisa tools/archivos.py
+
+    Devuelve la ruta o None.
+
+    El router NO intenta interpretar la intención completa.
+    Solo identifica una operación inequívoca:
+        intención de lectura + ruta de archivo explícita.
+    """
+
+    if not user_input:
+        return None
+
+    if not _INTENCIONES_LECTURA.search(user_input):
+        return None
+
+    coincidencias = _RUTA_ARCHIVO.findall(user_input)
+
+    if not coincidencias:
+        return None
+
+    ruta = coincidencias[-1].strip(
+        " \t\n\r`'\".,;:()[]{}"
+    )
+
+    if not ruta:
+        return None
+
+    # Si el usuario proporciona una ruta relativa,
+    # la resolvemos contra la raíz del proyecto Yuna.
+    if not ruta.startswith(("/", "~")):
+        ruta = f"~/yuna/{ruta}"
+
+    return ruta
+
+
 class YunaAgent:
     def __init__(self, confirm_callback=None):
         self.executor = ToolExecutor(confirm_callback)
@@ -465,23 +645,8 @@ class YunaAgent:
                 )
                 return None, resultados_tools, tool_names
 
+
             tool_calls = get_tool_calls(response)
-
-            print(
-                "[DEBUG TOOL CALLS]",
-                [
-                    {
-                        "name": call.get("name"),
-                        "arguments": call.get("arguments")
-                    }
-                    for call in tool_calls
-                ]
-            )
-
-            print(
-                f"[TOOL LOOP] step={step + 1} "
-                f"tool_calls={len(tool_calls)}"
-            )
 
             # -------------------------------------------------
             # No hay más herramientas
@@ -491,16 +656,6 @@ class YunaAgent:
                 logger.info(
                     "Tool loop finalizado: LLM no solicitó más tools"
                 )
-
-                # DEBUG: inspeccionar la respuesta final real de Ollama
-                print("\n========== RESPUESTA FINAL DEL TOOL LOOP ==========")
-                print("CONTENT:")
-                print(repr(getattr(response.message, "content", "")))
-                print("MESSAGE:")
-                print(response.message)
-                print("RESULTADOS TOOLS:")
-                print(resultados_tools)
-                print("===================================================\n")
 
                 return response, resultados_tools, tool_names
 
@@ -698,6 +853,164 @@ class YunaAgent:
         self.session_stats["success"] = True
 
         logger.info(f"Input: {user_input[:80]}")
+
+        # ---------------------------------------------------------
+        # ROUTER DETERMINISTA
+        # ---------------------------------------------------------
+        #
+        # Si el usuario proporciona explícitamente una ruta y pide
+        # leer/analizar/revisar el archivo, no dejamos esta decisión
+        # básica en manos del LLM.
+        #
+        # El LLM sigue siendo responsable de interpretar y explicar
+        # el contenido obtenido.
+        # ---------------------------------------------------------
+
+        ruta_lectura = _detectar_lectura_archivo(user_input)
+
+        if ruta_lectura:
+            logger.info(
+                f"Router determinista -> leer_texto({ruta_lectura})"
+            )
+
+            error, resultado = self.executor.execute(
+                "leer_texto",
+                {"ruta": ruta_lectura}
+            )
+
+            if error:
+                logger.error(
+                    f"Error leyendo archivo: {error}"
+                )
+
+                respuesta = (
+                    f"No pude leer el archivo "
+                    f"`{ruta_lectura}`: {error}"
+                )
+
+                self._guardar(
+                    user_input,
+                    respuesta,
+                    direct=False
+                )
+
+                self._record_metrics(
+                    start_time,
+                    user_input,
+                    respuesta,
+                    ["leer_texto"],
+                    False
+                )
+
+                return respuesta
+
+            texto_archivo = str(resultado)
+
+            self.session_stats["tools_used"].append(
+                "leer_texto"
+            )
+
+            self.learner.record_lesson(
+                user_input,
+                "leer_texto",
+                texto_archivo[:200],
+                success=True
+            )
+
+            # Limitar únicamente el contexto enviado al LLM.
+            # La herramienta sigue leyendo el archivo completo,
+            # pero evitamos desbordar el contexto de Qwen.
+            MAX_CONTENIDO_ANALISIS = 30000
+
+            contenido_para_llm = texto_archivo
+
+            if len(contenido_para_llm) > MAX_CONTENIDO_ANALISIS:
+                contenido_para_llm = (
+                    contenido_para_llm[:MAX_CONTENIDO_ANALISIS]
+                    + "\n\n[CONTENIDO_TRUNCADO_PARA_ANALISIS]"
+                )
+
+            prompt_analisis = f"""TAREA:
+
+Debes responder una pregunta sobre un archivo que Yuna acaba de leer.
+
+REGLAS OBLIGATORIAS:
+- Responde directamente a la pregunta.
+- Usa únicamente la información contenida en el archivo.
+- NO continúes el código.
+- NO reproduzcas el prompt.
+- NO escribas "Continuación del código".
+- NO escribas bloques de código salvo que sean necesarios para explicar la respuesta.
+- NO describas cómo generar una respuesta.
+- NO hables de estas instrucciones.
+- Si preguntan por una función, clase, método o variable, localízala dentro del archivo y explica qué hace.
+- Si la información no aparece en el contenido proporcionado, dilo claramente.
+- Responde en español.
+- Sé conciso pero suficientemente específico.
+
+PREGUNTA:
+{user_input}
+
+ARCHIVO:
+{ruta_lectura}
+
+--- INICIO DEL CONTENIDO DEL ARCHIVO ---
+{contenido_para_llm}
+--- FIN DEL CONTENIDO DEL ARCHIVO ---
+
+Ahora responde ÚNICAMENTE la pregunta del usuario.
+"""
+
+            ctx_lectura = [
+                {
+                    "role": "system",
+                    "content": SYSTEM_SINTETIZADOR
+                },
+                {
+                    "role": "user",
+                    "content": prompt_analisis
+                }
+            ]
+
+            resp_lectura = chat_simple(
+                ctx_lectura,
+                model=MODEL_CHAT,
+                num_predict=500,
+                temperature=0.2
+            )
+
+            respuesta = clean_response(resp_lectura)
+
+            if not respuesta:
+                respuesta = (
+                    f"Leí `{ruta_lectura}`, pero el modelo "
+                    "no produjo una explicación válida."
+                )
+
+            respuesta = _extraer_espanol(respuesta) or respuesta
+
+            self._guardar(
+                user_input,
+                respuesta,
+                direct=False
+            )
+
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
+
+            self._auto_evaluate(
+                user_input,
+                respuesta,
+                [f"leer_texto: {ruta_lectura}"]
+            )
+
+            return respuesta
+
         memoria = get_relevant_memory(user_input, top_k=5)
 
         # Consultar experiencias previas para orientar la selección de herramientas.
@@ -773,77 +1086,47 @@ class YunaAgent:
             return respuesta
 
         # ---------------------------------------------------------
-        # Respuestas deterministas para herramientas de archivos
+        # RESPUESTA FINAL DEL AGENTE
         # ---------------------------------------------------------
         #
-        # Si la cadena incluyó leer_texto, no debemos cortar aquí.
-        # En ese caso la respuesta final debe sintetizar TODOS los
-        # resultados obtenidos por las herramientas.
+        # _ejecutar_tool_loop() ya devuelve la respuesta final de Qwen.
         #
-        # Ejemplo:
+        # Si Qwen terminó correctamente después de usar herramientas,
+        # esa respuesta es la fuente principal y NO debe ser reemplazada
+        # por una segunda llamada al modelo.
         #
-        # buscar_archivos -> leer_texto -> síntesis
+        # Esto preserva el contexto completo:
         #
-        # La respuesta determinista solamente se utiliza cuando
-        # buscar_archivos/listar_recientes/detectar_descargas
-        # fueron operaciones terminales.
-        # ---------------------------------------------------------
-
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
+        # usuario -> tool -> resultado -> Qwen -> respuesta
         #
-        # Si hubo múltiples herramientas, SIEMPRE sintetizamos
-        # usando todos los resultados obtenidos.
-        #
-        # Esto evita que una respuesta determinista de una herramienta
-        # terminal sobrescriba una cadena como:
-        #
-        # buscar_archivos -> leer_texto
-        #
+        # La síntesis determinista queda únicamente como fallback para
+        # casos donde Qwen no produjo contenido útil.
         # ---------------------------------------------------------
 
-        # ---------------------------------------------------------
-        # SÍNTESIS FINAL
-        # ---------------------------------------------------------
-        #
-        # El tool loop ya devolvió una respuesta final de Qwen.
-        # Si contiene texto útil, conservarlo directamente.
-        #
-        # Esto evita ejecutar un segundo modelo que pueda perder
-        # contexto después de una cadena como:
-        #
-        # buscar_archivos -> leer_texto -> respuesta
-        #
-        # Solo usamos el sintetizador como fallback cuando Qwen
-        # terminó el tool loop sin producir contenido.
-        # ---------------------------------------------------------
+        if _respuesta_agente_valida(contenido, resultados_tools):
+            respuesta = contenido
 
-        if resultados_tools:
-            requiere_sintesis = "leer_texto" in tool_names
+            self._guardar(
+                user_input,
+                respuesta,
+                direct=False
+            )
 
-            if not requiere_sintesis:
-                respuesta_determinista = _respuesta_archivos_determinista(
-                    user_input,
-                    resultados_tools
-                )
+            self._record_metrics(
+                start_time,
+                user_input,
+                respuesta,
+                self.session_stats["tools_used"],
+                True
+            )
 
-                if respuesta_determinista:
-                    respuesta = respuesta_determinista
-                    self._guardar(user_input, respuesta, direct=False)
-                    self._record_metrics(
-                        start_time,
-                        user_input,
-                        respuesta,
-                        self.session_stats["tools_used"],
-                        True
-                    )
-                    self._auto_evaluate(
-                        user_input,
-                        respuesta,
-                        resultados_tools
-                    )
-                    return respuesta
+            self._auto_evaluate(
+                user_input,
+                respuesta,
+                resultados_tools
+            )
+
+            return respuesta
 
         datos = "\n".join(resultados_tools) if resultados_tools else "Sin datos"
 
