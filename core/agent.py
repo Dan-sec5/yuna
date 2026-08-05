@@ -618,6 +618,44 @@ def _extraer_bloque_codigo(
     return bloque.strip() or None
 
 
+def _es_pregunta_contextual_codigo(pregunta: str) -> bool:
+    """
+    Detecta preguntas que necesitan conservar el contexto completo
+    del archivo en lugar de extraer únicamente una función o clase.
+
+    Ejemplos:
+        ¿Qué hace process después de leer el archivo?
+        ¿Qué ocurre después?
+        ¿Cuáles son las etapas posteriores?
+        ¿Qué pasa luego de ejecutar esto?
+    """
+    if not pregunta:
+        return False
+
+    texto = pregunta.lower()
+
+    patrones = (
+        "después",
+        "despues",
+        "luego",
+        "posterior",
+        "posteriormente",
+        "qué ocurre después",
+        "que ocurre despues",
+        "qué pasa después",
+        "que pasa despues",
+        "qué hace después",
+        "que hace despues",
+        "qué ocurre luego",
+        "que ocurre luego",
+        "qué pasa luego",
+        "que pasa luego",
+        "etapas posteriores",
+    )
+
+    return any(patron in texto for patron in patrones)
+
+
 def _es_seguimiento_lectura(pregunta: str) -> bool:
     """
     Detecta preguntas que probablemente continúan el análisis
@@ -730,6 +768,11 @@ class YunaAgent:
         # Contexto de la última lectura de archivo durante la sesión.
         # Permite responder preguntas de seguimiento sin repetir la ruta.
         self._ultima_lectura = None
+
+        # Último elemento de código analizado durante la sesión.
+        # Permite responder preguntas de seguimiento como:
+        # "¿Qué hace process después?"
+        self._ultimo_elemento_codigo = None
 
         self.session_stats = {"tools_used": [], "success": True, "latency": 0}
 
@@ -1171,6 +1214,23 @@ class YunaAgent:
                 )
             )
 
+            # Si la pregunta actual no vuelve a mencionar
+            # "función", "método", "clase" o "def", pero continúa
+            # hablando del elemento anterior, reutilizamos ese
+            # elemento de forma determinista.
+            if (
+                not nombre_elemento
+                and self._ultimo_elemento_codigo
+                and _es_seguimiento_lectura(user_input)
+            ):
+                nombre_elemento = self._ultimo_elemento_codigo["nombre"]
+                tipo_elemento = self._ultimo_elemento_codigo["tipo"]
+
+                logger.info(
+                    "Reutilizando último elemento de código: "
+                    f"{tipo_elemento} {nombre_elemento}"
+                )
+
             if nombre_elemento:
 
                 bloque = _extraer_bloque_codigo(
@@ -1180,6 +1240,11 @@ class YunaAgent:
                 )
 
                 if bloque:
+
+                    self._ultimo_elemento_codigo = {
+                        "nombre": nombre_elemento,
+                        "tipo": tipo_elemento,
+                    }
 
                     contenido_para_llm = (
                         f"ELEMENTO SOLICITADO: "
