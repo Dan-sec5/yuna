@@ -1,0 +1,506 @@
+# YUNA - TAREAS Y ESTADO DEL PROYECTO
+# Actualizado: 2026-08-08
+# Punto de control: limpieza de repositorio / revisión de agente
+
+============================================================
+ESTADO ACTUAL
+============================================================
+
+[OK] git diff --check
+[OK] 57 tests passed
+[OK] Tests: 57 passed in 83.93s
+[OK] Cambios de limpieza principales ya están staged
+[TODO] YUNA_TAREAS.txt debe quedar incluido en el próximo commit
+
+============================================================
+PRIORIDAD 0 - NO ROMPER FUNCIONALIDAD
+============================================================
+
+[!] aprender.py está staged para eliminación.
+
+REFERENCIAS ACTIVAS ENCONTRADAS:
+
+./interface/actions.py
+./interface/avatar_v2.py
+./avatar.py
+
+Estas referencias todavía ejecutan:
+
+    python3 aprender.py
+
+ACCION:
+
+[ ] Determinar si aprender.py fue reemplazado completamente por el
+    sistema actual de aprendizaje/memoria.
+
+[ ] Si fue reemplazado:
+    - eliminar las referencias antiguas.
+    - actualizar los botones/acciones "Aprender".
+    - verificar que avatar_v2 y actions utilicen la ruta nueva.
+
+[ ] Si NO fue reemplazado:
+    - restaurar aprender.py.
+    - investigar su función actual antes de eliminarlo.
+
+NO HACER:
+    - No confirmar la eliminación de aprender.py como definitiva
+      hasta resolver sus referencias.
+
+============================================================
+PRIORIDAD 1 - AGENTE
+============================================================
+
+Objetivo principal:
+Corregir y validar el modo agente, especialmente el flujo de
+tool-calls / multi-loop / contexto / síntesis de respuesta.
+
+Archivos principales:
+
+./core/agent.py
+./core/executor.py
+./core/llm.py
+./core/planner.py
+./core/context.py
+./core/evaluator.py
+./tools/registry.py
+./tools/schemas.py
+
+Estado:
+
+[OK] Tests existentes pasan.
+[TODO] Probar comportamiento real del agente desde Bash.
+[TODO] Verificar que una solicitud normal termine en una respuesta.
+[TODO] Verificar que un tool-call termine correctamente.
+[TODO] Verificar que no exista loop infinito.
+[TODO] Verificar múltiples tools sin duplicar ejecuciones.
+[TODO] Verificar que el contexto de herramientas llegue correctamente
+      al LLM.
+[TODO] Verificar síntesis final después de ejecutar herramientas.
+
+============================================================
+PRIORIDAD 2 - LIMPIEZA DE ARTEFACTOS
+============================================================
+
+ARTEFACTOS RESTANTES:
+
+./interface/avatar_v2.py~
+./interface/avatar.py.bak
+./interface/__pycache__/actions.cpython-314.pyc
+./interface/__pycache__/agent_cli.cpython-314.pyc
+./interface/__pycache__/cli.cpython-314.pyc
+./interface/__pycache__/__init__.cpython-314.pyc
+./interface/__pycache__/avatar_v3.cpython-314.pyc
+
+./tools/archivos.py.bak
+./tools/__pycache__/sistema.cpython-314.pyc
+./tools/__pycache__/datos.cpython-314.pyc
+./tools/__pycache__/schemas.cpython-314.pyc
+./tools/__pycache__/web.cpython-314.pyc
+./tools/__pycache__/permisos.cpython-314.pyc
+./tools/__pycache__/registry.cpython-314.pyc
+./tools/__pycache__/__init__.cpython-314.pyc
+./tools/__pycache__/archivos.cpython-314.pyc
+./tools/sistema.py.bak
+./tools/permisos.py.bak
+
+./.DS_Store
+
+./core/learning.py.normalizado
+./core/__pycache__/evaluator.cpython-314.pyc
+./core/__pycache__/executor.cpython-314.pyc
+./core/__pycache__/context.cpython-314.pyc
+./core/__pycache__/logger.cpython-314.pyc
+./core/__pycache__/agent.cpython-314.pyc
+./core/__pycache__/llm.cpython-314.pyc
+./core/__pycache__/__init__.cpython-314.pyc
+./core/__pycache__/learning.cpython-314.pyc
+./core/agent.py.bak
+./core/planner.py.bak
+./core/learning.py.save
+./core/learning.py.bak
+
+./memory/__pycache__/manager.cpython-314.pyc
+./memory/__pycache__/__init__.cpython-314.pyc
+
+./config/__pycache__/__init__.cpython-314.pyc
+./config/__pycache__/paths.cpython-314.pyc
+
+./tests/test_agent.py.bak
+./tests/test_permissions.py.bak
+./tests/__pycache__/test_tools.cpython-314-pytest-9.1.1.pyc
+./tests/__pycache__/test_memory.cpython-314-pytest-9.1.1.pyc
+./tests/__pycache__/test_permissions.cpython-314-pytest-9.1.1.pyc
+./tests/__pycache__/__init__.cpython-314.pyc
+./tests/__pycache__/test_paths.cpython-314-pytest-9.1.1.pyc
+./tests/__pycache__/test_agent.cpython-314-pytest-9.1.1.pyc
+./tests/__pycache__/test_core.cpython-314-pytest-9.1.1.pyc
+./tests/test_tools.py.bak
+
+./prueba_seguridad.txt.bak
+./automation/watchers.py.bak
+
+./backups/pre_paths_20260802_132314/tools/archivos.py.bak
+./backups/pre_paths_20260802_132314/tools/sistema.py.bak
+./backups/pre_paths_20260802_132314/tools/permisos.py.bak
+./backups/pre_paths_20260802_132314/core/agent.py.bak
+./backups/pre_paths_20260802_132314/core/planner.py.bak
+./backups/pre_paths_20260802_132314/core/learning.py.save
+./backups/pre_paths_20260802_132314/core/learning.py.bak
+
+./backups/pre_paths_20260802_132300/tools/archivos.py.bak
+./backups/pre_paths_20260802_132300/tools/sistema.py.bak
+./backups/pre_paths_20260802_132300/tools/permisos.py.bak
+./backups/pre_paths_20260802_132300/core/agent.py.bak
+./backups/pre_paths_20260802_132300/core/planner.py.bak
+./backups/pre_paths_20260802_132300/core/learning.py.save
+./backups/pre_paths_20260802_132300/core/learning.py.bak
+
+============================================================
+CACHES RESTANTES
+============================================================
+
+./interface/__pycache__
+./tools/__pycache__
+./core/__pycache__
+./memory/__pycache__
+./config/__pycache__
+./tests/__pycache__
+
+ACCION:
+
+[ ] Eliminar caches __pycache__ no versionados.
+[ ] Confirmar reglas de .gitignore para Python caches.
+[ ] Confirmar que .DS_Store esté ignorado.
+[ ] No eliminar backups históricos hasta confirmar que no sean
+    necesarios para recuperación.
+
+============================================================
+PRIORIDAD 3 - BACKUPS
+============================================================
+
+Existen múltiples backups históricos bajo:
+
+./backups/
+
+Entre ellos:
+
+20260802_100037
+20260802_100502
+pre_dynamic_locations_20260802_134850
+pre_dynamic_locations_20260802_134856
+pre_fix_agent_loop_20260802_205146
+pre_fix_multitool_20260802_155936
+pre_fix_tool_context_20260802_223554
+pre_fix_tool_loop_20260802_222732
+pre_paths_20260802_132300
+pre_paths_20260802_132314
+pre_paths_phase2_20260802_135211
+pre_paths_phase5_20260802_141036
+pre_phase12_13_20260802_145016
+pre_phase12a_20260802_145421
+pre_phase12b_20260802_150111
+pre_phase13_20260802_150322
+pre_phase13a_20260802_150923
+vnext_20260802_112941
+
+ESTADO:
+
+[OK] Muchos backups ya están staged para eliminación.
+
+ACCION:
+
+[ ] Confirmar que las eliminaciones corresponden únicamente a
+    backups históricos no necesarios.
+[ ] No restaurar backups automáticamente.
+[ ] Utilizar backups solamente como referencia si aparece una
+    regresión real.
+
+============================================================
+PRIORIDAD 4 - INTERFACE
+============================================================
+
+Actualmente existen múltiples variantes de avatar:
+
+./avatar.py
+./avatar_v2.py
+./interface/avatar.py
+./interface/avatar_v2.py
+./interface/avatar_v3.py
+
+Y numerosas copias históricas de avatar_v2 dentro de interface/.
+
+ACCION:
+
+[ ] Determinar cuál es la interfaz oficial.
+[ ] Determinar cuál es el avatar oficial.
+[ ] Determinar si avatar_v3 es experimental o activo.
+[ ] Eliminar referencias obsoletas solamente después de identificar
+    el punto de entrada real.
+[ ] Evitar mantener múltiples implementaciones activas sin necesidad.
+
+============================================================
+PRIORIDAD 5 - REFERENCIAS A BACKUPS
+============================================================
+
+Se detectaron referencias a /backups/ en:
+
+./tests/test_tools.py
+
+También aparecen referencias históricas en:
+
+./logs/yuna.log
+
+IMPORTANTE:
+
+Los registros en logs no deben confundirse con referencias activas
+del código.
+
+El test test_tools.py sí debe conservarse porque valida que las rutas
+normalizadas no apunten a /backups/.
+
+============================================================
+PRIORIDAD 6 - GIT
+============================================================
+
+Estado observado:
+
+- Muchas eliminaciones están staged.
+- YUNA_TAREAS.txt estaba inicialmente sin trackear.
+- git diff --check está limpio.
+- git diff --name-status no muestra cambios unstaged porque los
+  cambios principales están en el índice.
+
+ACCIONES:
+
+[ ] Revisar:
+
+    git status --short
+
+[ ] Revisar cambios staged:
+
+    git diff --cached --stat
+
+[ ] Revisar contenido staged antes del commit:
+
+    git diff --cached --name-status
+
+[ ] Agregar YUNA_TAREAS.txt:
+
+    git add YUNA_TAREAS.txt
+
+[ ] Volver a comprobar:
+
+    git status --short
+    git diff --cached --stat
+
+NO HACER TODAVÍA:
+
+    git commit
+
+Hasta resolver el caso de aprender.py y validar el agente.
+
+============================================================
+PRIORIDAD 7 - VALIDACION FINAL
+============================================================
+
+Antes de cualquier commit:
+
+[ ] python3 -m pytest -q
+[ ] git diff --check
+[ ] git status --short
+[ ] git diff --cached --stat
+
+Después de cambios funcionales:
+
+[ ] Repetir todos los tests.
+[ ] Probar CLI.
+[ ] Probar modo agente.
+[ ] Probar tool-calls.
+[ ] Probar memoria.
+[ ] Probar interfaz.
+[ ] Revisar logs.
+
+============================================================
+REGLA DE TRABAJO
+============================================================
+
+1. No hacer limpiezas masivas sin revisar referencias.
+2. No modificar varias capas del agente simultáneamente.
+3. Una corrección por ciclo.
+4. Ejecutar tests después de cada corrección.
+5. Registrar cada cambio importante aquí.
+6. No restaurar backups por intuición.
+7. No eliminar archivos activos solamente porque parezcan antiguos.
+8. Mantener YUNA_TAREAS.txt actualizado como bitácora técnica.
+9. Prioridad actual: comportamiento del agente antes que limpieza estética.
+10. Evitar retrabajo: revisar primero el estado Git y los cambios staged.
+
+============================================================
+SIGUIENTE PASO
+============================================================
+
+1. Resolver si aprender.py realmente puede eliminarse.
+2. Revisar .gitignore y caches.
+3. Validar estructura de entradas de YUNA.
+4. Probar el modo agente desde Bash.
+5. Diagnosticar multi-loop/tool-loop con evidencia.
+6. Corregir un solo punto.
+7. Ejecutar 57+ tests.
+8. Actualizar YUNA_TAREAS.txt.
+9. Revisar diff.
+10. Solo entonces continuar con la siguiente fase.
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — VALIDACIÓN DEL SISTEMA DE APRENDIZAJE
+============================================================
+
+[OK] Se confirmó que el sistema de aprendizaje activo es:
+    ./core/learning.py
+
+[OK] LearningEngine importa correctamente:
+    from core.learning import LearningEngine
+
+[OK] Inicialización validada:
+    python3 - <<'PY'
+    from core.learning import LearningEngine
+    engine = LearningEngine()
+    print("LearningEngine OK")
+    print(engine.get_best_tools_for("buscar archivos en descargas"))
+    PY
+
+[OK] Resultado obtenido:
+    LearningEngine OK
+    ['buscar_archivos']
+
+[OK] Métodos activos detectados en core/learning.py:
+    - _normalize_learning_words()
+    - record_lesson()
+    - record_user_feedback()
+    - get_lessons_for_query()
+    - get_best_tools_for()
+    - _extract_pattern()
+
+[OK] Integración detectada en core/agent.py:
+    - LearningEngine se instancia en el agente.
+    - record_lesson() se utiliza después de ejecuciones.
+    - get_best_tools_for() participa en la selección de herramientas.
+    - record_user_feedback() registra feedback del usuario.
+    - También existe registro de respuestas de síntesis demasiado cortas.
+
+[OK] Base de datos utilizada:
+    ./data/yuna.db
+
+[OK] Tablas creadas/gestionadas por LearningEngine:
+    - lessons
+    - user_feedback
+    - interaction_metrics
+
+[IMPORTANTE] aprender.py está staged para eliminación.
+
+[DECISIÓN]
+    NO restaurar aprender.py por intuición.
+
+    El aprendizaje ya tiene implementación activa dentro de:
+        core/learning.py
+
+    Antes de confirmar definitivamente la eliminación de aprender.py,
+    se debe comprobar si la GUI todavía necesita un launcher independiente
+    o si sus botones deben migrarse para utilizar directamente la nueva
+    arquitectura.
+
+[REVISAR]
+    Referencias activas a aprender.py:
+        interface/actions.py
+        interface/avatar.py
+        interface/avatar_v2.pre_actions.py
+        avatar.py
+
+[PRÓXIMO PASO]
+    1. Revisar y corregir referencias GUI a aprender.py.
+    2. Determinar si el botón "Aprender" debe:
+       a) eliminarse,
+       b) convertirse en una acción de aprendizaje/feedback,
+       c) abrir una interfaz nueva basada en LearningEngine.
+    3. No modificar core/learning.py mientras la integración actual
+       siga funcionando.
+    4. Ejecutar pruebas del agente después de resolver la GUI.
+    5. Validar específicamente selección de herramientas aprendidas.
+    6. Revisar posteriormente la calidad del ranking de LearningEngine.
+
+============================================================
+ESTADO DE LIMPIEZA DE BACKUPS / LEGACY
+============================================================
+
+[OK] backups/ y legacy/ están staged para eliminación.
+
+[OK] git ls-files backups legacy no devuelve archivos rastreados
+     en el estado indexado actual.
+
+[REVISAR] Permanecen copias históricas dentro del árbol de trabajo,
+     principalmente:
+        *.bak*
+        *.save
+        *~
+        interface/avatar_v2*
+        core/agent.py.bak*
+        core/learning.py.bak*
+        tools/*.bak*
+
+[REGLA]
+    No restaurar archivos históricos automáticamente.
+
+[REGLA]
+    Las búsquedas funcionales deben excluir:
+        .git
+        backups
+        legacy
+        *.bak*
+        *.save
+        *~
+
+[OK] tools/archivos.py ya contiene exclusiones para:
+        backups
+        legacy
+
+[OK] tests/test_tools.py contiene validación para impedir que las
+     rutas normalizadas apunten a /backups/ o /legacy/.
+
+[NOTA]
+    Las apariciones de "backups" o "legacy" en:
+        YUNA_TAREAS.txt
+        logs/
+        comentarios/documentación
+        tests
+        scripts de mantenimiento
+    no representan necesariamente referencias funcionales del agente.
+
+============================================================
+ESTADO ACTUAL
+============================================================
+
+APRENDIZAJE:
+    core/learning.py        [OK]
+    LearningEngine          [OK]
+    selección aprendida     [OK]
+    persistencia SQLite     [OK]
+    aprender.py             [PENDIENTE DECISIÓN]
+
+AGENTE:
+    core/agent.py            [EN REVISIÓN]
+    multi-tool               [PENDIENTE VALIDACIÓN]
+    multi-loop               [PENDIENTE VALIDACIÓN]
+    síntesis                  [PENDIENTE VALIDACIÓN]
+
+GUI:
+    interface/actions.py     [REVISAR aprender.py]
+    interface/avatar.py      [REVISAR aprender.py]
+    interface/avatar_v2.py  [REVISAR ESTADO ACTIVO]
+    interface/avatar_v3.py  [REVISAR ESTADO ACTIVO]
+    avatar.py                [REVISAR DUPLICACIÓN]
+
+LIMPIEZA:
+    backups/                 [STAGED DELETE]
+    legacy/                  [STAGED DELETE]
+    archivos .bak históricos [NO TOCAR AÚN]
+
+============================================================
