@@ -15,3 +15,5 @@ logs/*.log
 .backup_*/
 *.bak
 *.bak
+*.bak*
+.backup_optimizacion_*/
