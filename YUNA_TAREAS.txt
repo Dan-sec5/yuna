@@ -504,3 +504,183 @@ LIMPIEZA:
     archivos .bak históricos [NO TOCAR AÚN]
 
 ============================================================
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — CORRECCIÓN DE REFERENCIAS ROTAS
+============================================================
+
+[OK] Revisada nuevamente la rama main de GitHub.
+
+[OK] Se confirmó que aprender.py ya no forma parte de la arquitectura
+     actual de Yuna.
+
+[OK] El aprendizaje activo permanece implementado en:
+     ./core/learning.py
+
+[OK] LearningEngine fue validado anteriormente con:
+     get_best_tools_for("buscar archivos en descargas")
+
+[CORREGIDO] app.py apuntaba a:
+     interface.avatar_v3
+
+[CORREGIDO] El archivo interface/avatar_v3.py no existe actualmente
+     en la rama main.
+
+[CORREGIDO] app.py ahora utiliza:
+     interface.avatar
+
+[CORREGIDO] interface/actions.py contenía una función activa:
+     abrir_aprendizaje()
+
+[CORREGIDO] Se eliminó la referencia a:
+     python3 aprender.py
+
+[CORREGIDO] interface/avatar.py importaba:
+     abrir_aprendizaje
+
+[CORREGIDO] Se eliminó el botón APRENDER porque dependía de
+     aprender.py eliminado.
+
+[DECISIÓN]
+     No restaurar aprender.py.
+
+[DECISIÓN]
+     No crear un nuevo archivo .py para reemplazar aprender.py.
+
+[DECISIÓN]
+     LearningEngine continúa integrado dentro del agente mediante
+     core/learning.py.
+
+[PRIORIDAD ACTUAL]
+     Validar que la interfaz arranque correctamente y posteriormente
+     continuar con el diagnóstico del modo agente.
+
+[REGLA]
+     No crear archivos .py adicionales durante esta fase.
+
+[REGLA]
+     No modificar core/learning.py mientras las pruebas actuales
+     continúen demostrando que su integración funciona.
+
+[PRÓXIMAS VALIDACIONES]
+     1. Compilar app.py e interface.
+     2. Buscar referencias activas a aprender.py.
+     3. Verificar que app.py apunte a interface.avatar.
+     4. Ejecutar tests.
+     5. Probar "python3 app.py avatar".
+     6. Probar "python3 app.py agent".
+     7. Diagnosticar el comportamiento real del tool-loop.
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — REVISIÓN NUEVA DE GITHUB
+============================================================
+
+[OK] Repo revisada nuevamente contra GitHub.
+[OK] Último commit revisado: 1d33d7a
+[OK] core/learning.py continúa siendo el LearningEngine activo.
+[OK] LearningEngine ya está integrado en core/agent.py.
+[OK] tools/aprender.py existe en la arquitectura actual.
+[OK] app.py continúa siendo el punto de entrada principal.
+
+[PROBLEMA CONFIRMADO]
+
+interface/actions.py todavía ejecuta:
+
+    python3 aprender.py
+
+pero aprender.py ya no existe en la raíz.
+
+Esto provoca una referencia obsoleta.
+
+[DECISIÓN]
+
+NO restaurar aprender.py.
+NO crear un nuevo archivo .py.
+NO modificar core/learning.py por este problema.
+
+La arquitectura actual ya contiene el aprendizaje integrado mediante:
+
+    core/learning.py
+    LearningEngine
+
+[ACCIÓN SIGUIENTE]
+
+[ ] Corregir interface/actions.py para eliminar la referencia
+    obsoleta a ./aprender.py.
+
+[ ] Revisar si el botón APRENDER de interface/avatar.py debe
+    mantenerse como acceso al aprendizaje o convertirse en una
+    acción informativa sobre LearningEngine.
+
+[ ] No tocar core/learning.py mientras sus pruebas e integración
+    continúen funcionando.
+
+[ ] Ejecutar pruebas después de esta corrección.
+
+[ ] Revisar nuevamente referencias activas a aprender.py.
+
+============================================================
+REGLA ACTUAL DE TRABAJO
+============================================================
+
+No crear nuevos archivos Python para solucionar referencias
+antiguas.
+
+Primero corregir referencias existentes.
+
+Una modificación por ciclo.
+
+Después de cada modificación:
+
+    python3 -m pytest -q
+    git diff --check
+    git status --short
+
+No hacer commit todavía.
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — CIERRE DE REFERENCIAS aprender.py
+============================================================
+
+[OK] Revisión remota de GitHub realizada.
+[OK] Último commit remoto revisado: 1d33d7a.
+[OK] GitHub no reporta referencias activas a aprender.py.
+[OK] GitHub no reporta referencias activas a abrir_aprendizaje.
+[OK] core/learning.py continúa siendo el LearningEngine activo.
+[OK] No se restaurará aprender.py.
+[OK] No se creará ningún archivo .py para sustituirlo.
+
+[OK] Referencias funcionales locales revisadas con exclusiones:
+    .git
+    backups
+    legacy
+    *.bak*
+    *.save
+    *~
+
+[OK] Las referencias restantes encontradas en YUNA_TAREAS.txt
+     corresponden al historial de trabajo y no a código ejecutable.
+
+[OK] interface/actions.py ya no debe lanzar:
+    python3 aprender.py
+
+[OK] interface/avatar.py ya no debe depender de:
+    abrir_aprendizaje
+    aprender.py
+
+[REGLA]
+    No crear nuevos archivos Python para resolver referencias antiguas.
+
+[REGLA]
+    Una modificación por ciclo.
+
+[PRÓXIMO CICLO]
+    Ejecutar:
+        python3 -m pytest -q
+        git diff --check
+        git status --short
+
+[ ] Validar resultado de las pruebas.
+[ ] Después de validar, comenzar diagnóstico del modo agente.
+[ ] No hacer commit todavía.
+
