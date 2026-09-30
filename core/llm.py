@@ -2,7 +2,6 @@
 core/llm.py — Wrapper Ollama con think=False para Qwen3
 """
 import ollama
-import logging
 import re
 from core.logger import get_logger
 from typing import List, Dict, Any, Optional
@@ -14,18 +13,22 @@ MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:8b")
 MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:8b")
 OLLAMA_HOST = CONFIG["ollama"].get("host", "http://localhost:11434")
 KEEP_ALIVE = CONFIG["ollama"].get("keep_alive", "30m")
+TIMEOUT = CONFIG["ollama"].get("timeout", 120)
 
-client = ollama.Client(host=OLLAMA_HOST)
+# Timeout nativo del cliente — sin manipular socket global
+client = ollama.Client(host=OLLAMA_HOST, timeout=TIMEOUT)
+
 
 def _is_thinking_model(model: str) -> bool:
     thinking_models = ["qwen3", "deepseek-r1", "deepseek-v3", "gemma4", "gpt-oss"]
     return any(tm in model.lower() for tm in thinking_models)
 
+
 def _get_options(model: str, extra_options: dict) -> dict:
     opts = {
         "num_predict": 400,
         "temperature": 0.2,
-        "num_ctx": 4096,
+        "num_ctx": 8192,
         "keep_alive": KEEP_ALIVE,
     }
     opts.update(extra_options)
@@ -33,6 +36,19 @@ def _get_options(model: str, extra_options: dict) -> dict:
         opts["think"] = False
         logger.debug(f"Thinking desactivado para {model}")
     return opts
+
+
+def _chat(kwargs: dict, options: dict) -> Any:
+    """Llamada única a Ollama con manejo de errores centralizado."""
+    try:
+        return client.chat(**kwargs)
+    except ollama.ResponseError as e:
+        logger.error(f"Ollama error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error inesperado en chat: {e}")
+        return None
+
 
 def preload_model(model: str = None):
     model = model or MODEL_AGENT
@@ -46,6 +62,7 @@ def preload_model(model: str = None):
         logger.info(f"Modelo {model} precargado en RAM")
     except Exception as e:
         logger.warning(f"No se pudo precargar {model}: {e}")
+
 
 def chat_with_tools(
     messages: List[Dict],
@@ -63,20 +80,8 @@ def chat_with_tools(
     }
     if _is_thinking_model(model):
         kwargs["think"] = False
-    try:
-        import socket
-        original_timeout = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(opts.get("timeout", 120))
-        try:
-            return client.chat(**kwargs)
-        finally:
-            socket.setdefaulttimeout(original_timeout)
-    except ollama.ResponseError as e:
-        logger.error(f"Ollama error: {e}")
-        return None
-    except Exception as e:
-        logger.error(f"Error inesperado: {e}")
-        return None
+    return _chat(kwargs, opts)
+
 
 def chat_simple(
     messages: List[Dict],
@@ -92,17 +97,8 @@ def chat_simple(
     }
     if _is_thinking_model(model):
         kwargs["think"] = False
-    try:
-        import socket
-        original_timeout = socket.getdefaulttimeout()
-        socket.setdefaulttimeout(opts.get("timeout", 120))
-        try:
-            return client.chat(**kwargs)
-        finally:
-            socket.setdefaulttimeout(original_timeout)
-    except Exception as e:
-        logger.error(f"Error en chat simple: {e}")
-        return None
+    return _chat(kwargs, opts)
+
 
 def clean_response(response: Any) -> str:
     if response is None:
@@ -113,12 +109,12 @@ def clean_response(response: Any) -> str:
         content = response.get("message", {}).get("content", "") or ""
     else:
         content = str(response)
-    # FIX: Regex correcto para thinking tags
     content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
     content = re.sub(r'^(Okay[,]?|Alright|Sure|Let me|So[,]?|First|Hmm|Well)[,\s]*', '', content, flags=re.IGNORECASE)
     if "...done thinking." in content:
         content = content.split("...done thinking.")[-1]
     return content.strip()
+
 
 def get_tool_calls(response: Any) -> List[Dict]:
     if response is None:

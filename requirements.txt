@@ -1,3 +1,7 @@
+# ============================================================================
+# YUNA — Dependencias
+# ============================================================================
+
 # Core IA
 ollama>=0.3.0
 
@@ -9,11 +13,9 @@ pdfplumber>=0.10.0
 # Web
 yfinance>=0.2.0
 ddgs>=9.0.0
-sentence-transformers>=2.2.0  # Para busqueda semantica real (opcional)
+sentence-transformers>=2.2.0  # búsqueda semántica (opcional)
 
-# UI
-customtkinter>=5.2.0
-Pillow>=10.0.0
+# Voz
 edge-tts>=6.0.0
 
 # Automatización
@@ -23,10 +25,16 @@ watchdog>=3.0.0
 # Config
 python-dotenv>=1.0.0
 
+# TUI (interfaz terminal)
+textual>=0.50
+rich>=13.7
+Pillow>=10.0
+psutil>=5.9.0
+
 # Tests
 pytest>=7.0.0
 pytest-mock>=3.10.0
 
-# Voz (opcional - instalar por separado)
+# Voz opcional (instalar por separado)
 # openai-whisper>=20231117  # requiere torch
 # sox o ffmpeg para grabación

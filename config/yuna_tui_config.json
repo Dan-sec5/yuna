@@ -1,0 +1,27 @@
+{
+  "titulo": "Y  U  N  A",
+  "subtitulo": "AGENTE IA LOCAL",
+  "version": "v3.2",
+  "colores": {
+    "primario": "bright_magenta",
+    "secundario": "bright_cyan",
+    "acento": "bright_white",
+    "fondo_panel": "black",
+    "borde": "bright_blue",
+    "texto_dim": "grey50",
+    "ok": "bright_green",
+    "warn": "bright_yellow",
+    "error": "bright_red"
+  },
+  "avatar_ascii": [
+    "    .-\"\"\"\"\"\"-.",
+    "   /  .-..-.  \\",
+    "  |  / o  o \\  |",
+    "  |  \\  __  /  |",
+    "   \\  '----'  /",
+    "    '-......-'"
+  ],
+  "mostrar_stats": true,
+  "mostrar_avatar": true,
+  "ancho_panel": 72
+}

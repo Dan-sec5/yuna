@@ -6,7 +6,11 @@ from pathlib import Path
 
 from config.paths import resolve_location
 
-def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
+def buscar_archivos(
+    patron: str = "*",
+    carpeta: str = "home",
+    metadata: bool = False
+) -> list:
     """
     Busca archivos recursivamente.
 
@@ -62,11 +66,35 @@ def buscar_archivos(patron: str = "*", carpeta: str = "home") -> list:
         )
     ]
 
-    return sorted(
+    resultados = sorted(
         resultados,
         key=os.path.getmtime,
         reverse=True
     )
+
+    if metadata:
+        archivos = []
+
+        for ruta in resultados:
+            try:
+                stat = os.stat(ruta)
+
+                archivos.append({
+                    "nombre": os.path.basename(ruta),
+                    "ruta": ruta,
+                    "tamano_kb": round(stat.st_size / 1024, 1),
+                    "tamano_bytes": stat.st_size,
+                    "modificado": datetime.fromtimestamp(
+                        stat.st_mtime
+                    ).strftime("%Y-%m-%d %H:%M")
+                })
+
+            except OSError:
+                continue
+
+        return archivos
+
+    return resultados
 
 def listar_recientes(carpeta: str = "home", dias: int = 7) -> list:
     carpeta = str(resolve_location(carpeta))

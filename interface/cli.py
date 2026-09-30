@@ -1,25 +1,22 @@
+"""
+interface/cli.py
+
+Chat conversacional de Yuna (terminal).
+La voz se centraliza en interface/voice.py — no duplicar hablar() aquí.
+"""
 import sys
 import os
-import subprocess
-import threading
+
 sys.path.insert(0, os.path.expanduser("~/yuna"))
+
+from rich.console import Console
 
 from core.llm import chat_simple, clean_response
 from memory.manager import init_db, get_relevant_memory, add_episodic
-from config import get
+from interface.voice import hablar
 
-VOICE = get("voice.voice", "es-MX-DaliaNeural")
-MAX_CHARS = get("voice.max_chars", 300)
+console = Console()
 
-def hablar(texto: str):
-    def _hablar():
-        subprocess.run([
-            "edge-tts", "--voice", VOICE,
-            "--text", str(texto)[:MAX_CHARS],
-            "--write-media", "/tmp/yuna_chat.mp3"
-        ], capture_output=True)
-        os.system("afplay /tmp/yuna_chat.mp3")
-    threading.Thread(target=_hablar, daemon=True).start()
 
 def main():
     init_db()
@@ -34,9 +31,9 @@ MEMORIA:\n{memoria}"""
     }]
 
     saludo = "Hola Luis, soy Yuna. ¿En qué te ayudo?"
-    print(f"\nYuna → {saludo}\n")
+    console.print(f"\n[bold green]Yuna[/bold green] → {saludo}\n")
     hablar(saludo)
-    print("(escribe 'salir' para terminar)\n")
+    console.print("[dim](escribe 'salir' para terminar)[/dim]\n")
 
     while True:
         try:
@@ -44,9 +41,11 @@ MEMORIA:\n{memoria}"""
         except (EOFError, KeyboardInterrupt):
             break
 
-        if entrada.lower() == "salir":
+        if not entrada:
+            continue
+        if entrada.lower() in ("salir", "exit", "quit"):
             hablar("Hasta luego Luis.")
-            print("Yuna → Hasta luego Luis.")
+            console.print("[green]Yuna[/green] → Hasta luego Luis.")
             break
 
         mensajes.append({"role": "user", "content": entrada})
@@ -57,8 +56,9 @@ MEMORIA:\n{memoria}"""
 
         mensajes.append({"role": "assistant", "content": respuesta})
         add_episodic("chat", f"Luis: {entrada[:100]} | Yuna: {respuesta[:100]}")
-        print(f"\nYuna → {respuesta}\n")
+        console.print(f"\n[bold green]Yuna[/bold green] → {respuesta}\n")
         hablar(respuesta)
+
 
 if __name__ == "__main__":
     main()

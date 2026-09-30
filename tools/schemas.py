@@ -5,12 +5,16 @@ ALL_SCHEMAS: List[Dict] = [
         "type": "function",
         "function": {
             "name": "buscar_archivos",
-            "description": "Busca archivos por patrón glob en una carpeta",
+            "description": "Busca archivos por patrón glob en una carpeta. Devuelve rutas normalmente. Usa metadata=true cuando la consulta requiera comparar tamaño, fecha de modificación u otra metadata del archivo, por ejemplo: archivo más grande, más pequeño, más pesado o más reciente. NO uses leer_texto para obtener el tamaño de un archivo.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "patron": {"type": "string", "description": "Patrón glob, ej: *.xlsx"},
                     "carpeta": {"type": "string", "description": "Carpeta exacta donde buscar. Para archivos dentro del proyecto Yuna usa SIEMPRE ~/yuna. Para descargas usa descargas. Para escritorio usa escritorio. No uses home para representar ~/yuna."},
+                    "metadata": {
+                        "type": "boolean",
+                        "description": "Usa true cuando necesites comparar archivos por tamaño, fecha de modificación u otra metadata. Para consultas como 'más grande', 'más pequeño', 'más reciente' o 'más pesado' debe ser true."
+                    },
                 },
                 "required": ["patron"]
             }

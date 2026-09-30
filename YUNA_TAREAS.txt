@@ -684,3 +684,434 @@ ACTUALIZACIÓN 2026-08-08 — CIERRE DE REFERENCIAS aprender.py
 [ ] Después de validar, comenzar diagnóstico del modo agente.
 [ ] No hacer commit todavía.
 
+============================================================
+ACTUALIZACIÓN 2026-08-08 — AVATAR ACTIVO
+============================================================
+
+[OK] Se confirmó el renombrado lógico de avatar_v3 a avatar.
+
+[OK] app.py utiliza actualmente:
+    from interface.avatar import main as avatar_main
+
+[OK] app.py ejecuta:
+    avatar_main()
+
+[OK] No existen referencias activas a interface.avatar_v3
+     fuera de YUNA_TAREAS.txt.
+
+[OK] Las referencias restantes a avatar_v2/avatar_v3 encontradas
+     en YUNA_TAREAS.txt corresponden al historial de trabajo.
+
+[OK] interface/avatar.py es ahora la implementación activa
+     de la interfaz/avatar de Yuna.
+
+[REGLA]
+    No restaurar avatar_v3.py.
+
+[REGLA]
+    No crear nuevos archivos Python para resolver referencias
+    históricas.
+
+[PRÓXIMO CICLO]
+    Validar nuevamente:
+        python3 -m pytest -q
+        git diff --check
+        git status --short
+
+[ ] Después de validar, continuar con diagnóstico del modo agente.
+
+[OK] APRENDER fue restaurado en la interfaz activa.
+
+[OK] interface/avatar.py importa:
+    abrir_aprendizaje
+
+[OK] interface/avatar.py muestra:
+    03 APRENDER — Analizar patrones y memoria
+
+[OK] interface/actions.py contiene:
+    abrir_aprendizaje()
+
+[OK] abrir_aprendizaje() ejecuta el módulo existente:
+    python3 tools/aprender.py
+
+[OK] No se creó ningún archivo Python nuevo.
+
+[OK] Validación posterior:
+    57 passed
+
+[OK] git diff --check sin errores.
+
+[ESTADO]
+    Chat       [OK]
+    Agente     [OK] interfaz disponible
+    Aprender   [OK] interfaz restaurada
+    LearningEngine [OK]
+
+[PRÓXIMO CICLO]
+    Diagnosticar el problema al llamar al modo agente.
+
+[REGLA]
+    Una modificación por ciclo.
+    No crear nuevos archivos Python.
+    No hacer commit todavía.
+
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — DIAGNÓSTICO DEL AGENTE
+============================================================
+
+[OK] Validación general completada.
+
+Última prueba:
+
+    python3 -m pytest -q
+
+Resultado:
+
+    57 passed
+
+[OK] git diff --check ejecutado correctamente.
+
+[OK] No hacer commit todavía.
+
+Estado actual:
+
+    M YUNA_TAREAS.txt
+    M app.py
+    M interface/actions.py
+    M interface/avatar.py
+    M tools/aprender.py
+
+
+============================================================
+AVATAR
+============================================================
+
+[OK] interface/avatar.py es la implementación activa.
+
+[OK] app.py utiliza:
+
+    from interface.avatar import main as avatar_main
+
+[OK] app.py ejecuta:
+
+    avatar_main()
+
+[OK] La interfaz contiene actualmente:
+
+    01 CHAT
+    02 AGENTE
+    03 APRENDER
+
+[REGLA]
+
+No restaurar avatar_v3.py.
+
+[REGLA]
+
+No crear nuevos archivos Python para resolver referencias
+históricas del avatar.
+
+
+============================================================
+APRENDIZAJE
+============================================================
+
+[OK] LearningEngine está integrado en core/agent.py.
+
+[OK] tools/aprender.py fue actualizado para utilizar la
+arquitectura de memoria actual.
+
+[PENDIENTE]
+
+Determinar si tools/aprender.py debe mantenerse como launcher
+independiente o si su funcionalidad ya está cubierta por
+core/learning.py.
+
+[REGLA]
+
+No eliminar tools/aprender.py hasta revisar sus referencias.
+
+
+============================================================
+AGENTE — TOOL LOOP
+============================================================
+
+[OK] El tool loop multi-step está implementado.
+
+Flujo:
+
+    LLM
+      ↓
+    tool_call
+      ↓
+    Executor
+      ↓
+    resultado
+      ↓
+    LLM
+      ↓
+    siguiente decisión
+
+[OK] Se conserva el mensaje assistant que contiene tool_calls
+antes de agregar los resultados role=tool.
+
+[OK] Existe protección contra llamadas idénticas repetidas.
+
+[OK] Existe límite máximo:
+
+    max_steps = 5
+
+[OK] El executor continúa siendo el componente que ejecuta
+las herramientas.
+
+[OK] Se confirmó mediante logs que el loop puede avanzar:
+
+    Tool loop paso 1/5
+    Tool calls detectados: 1
+    Mensaje assistant con 1 tool_call(s) agregado al contexto
+    Ejecutando tool
+    Tool loop paso 2/5
+    Tool loop finalizado
+
+[CONCLUSIÓN]
+
+No existe evidencia actual de un loop infinito en el caso
+probado.
+
+No modificar todavía:
+
+    max_steps
+    llamadas_vistas
+    execute_batch()
+
+
+============================================================
+PROBLEMA ACTUAL 1 — RESPUESTA SIMPLE
+============================================================
+
+Se probó repetidamente:
+
+    hola
+
+Los logs muestran:
+
+    Input: hola
+    Tool loop paso 1/5
+    Thinking desactivado para qwen3:8b
+    Tool loop finalizado: LLM no solicitó más tools
+
+Sin embargo, posteriormente aparece:
+
+    WARNING No se pudo interpretar resultado de archivos
+
+y la respuesta tarda aproximadamente entre 30 y 80 segundos.
+
+[HIPÓTESIS]
+
+Una respuesta normal de Qwen podría estar siendo rechazada
+por:
+
+    _respuesta_agente_valida()
+
+Esto podría provocar una segunda llamada innecesaria a:
+
+    chat_simple()
+
+[NO CONFIRMADO]
+
+No modificar todavía esta lógica.
+
+Primero localizar exactamente el origen de:
+
+    No se pudo interpretar resultado de archivos
+
+
+============================================================
+PROBLEMA ACTUAL 2 — leer_texto
+============================================================
+
+Durante una prueba se observó:
+
+    Ejecutando tool: leer_texto
+    args: {'ruta': '~/yuna/YUNA_TAREAS'}
+
+Posteriormente:
+
+    Archivo no encontrado:
+    /Users/cuadrado/yuna/YUNA_TAREAS
+
+[CONCLUSIÓN]
+
+La expansión de:
+
+    ~/yuna/YUNA_TAREAS
+
+a:
+
+    /Users/cuadrado/yuna/YUNA_TAREAS
+
+funciona.
+
+El problema observado es que el agente generó:
+
+    YUNA_TAREAS
+
+en lugar de:
+
+    YUNA_TAREAS.txt
+
+Debe investigarse la generación/validación del argumento antes
+de modificar la expansión de rutas.
+
+
+============================================================
+PRÓXIMO DIAGNÓSTICO
+============================================================
+
+[ ] Localizar el origen exacto de:
+
+    "No se pudo interpretar resultado de archivos"
+
+[ ] Localizar:
+
+    _respuesta_agente_valida
+
+[ ] Revisar:
+
+    _extraer_espanol
+
+[ ] Determinar por qué una respuesta normal como "hola"
+no termina directamente como respuesta válida.
+
+[ ] No modificar core/llm.py todavía.
+
+[ ] No modificar core/learning.py todavía.
+
+[ ] No modificar executor.py todavía.
+
+[ ] No modificar el límite del tool loop todavía.
+
+
+============================================================
+VALIDACIÓN FUNCIONAL POSTERIOR
+============================================================
+
+Después de corregir el primer problema:
+
+[ ] Probar:
+
+    hola
+
+[ ] Confirmar que una respuesta simple utilice una sola
+    inferencia cuando no requiere herramientas.
+
+[ ] Probar lectura de un archivo existente.
+
+[ ] Probar una herramienta individual.
+
+[ ] Probar dos herramientas secuenciales:
+
+    buscar_archivos
+        ↓
+    leer_texto
+        ↓
+    respuesta final
+
+[ ] Confirmar que los resultados de tools lleguen al LLM.
+
+[ ] Confirmar que no existan llamadas duplicadas.
+
+[ ] Revisar tiempo de respuesta.
+
+
+============================================================
+REGLA DEL PRÓXIMO CICLO
+============================================================
+
+No corregir varias capas simultáneamente.
+
+Primero localizar:
+
+    "No se pudo interpretar resultado de archivos"
+
+Después modificar únicamente ese punto.
+
+Luego ejecutar:
+
+    python3 -m pytest -q
+    git diff --check
+    git status --short
+
+No hacer commit todavía.
+
+============================================================
+FIN DE ACTUALIZACIÓN
+============================================================
+
+============================================================
+ACTUALIZACIÓN 2026-08-08 — MEMORIA / APRENDIZAJE VALIDADO
+============================================================
+
+[OK] LearningEngine validado mediante pruebas reales.
+
+[OK] La normalización reconoce variantes semánticas:
+    - busca / buscar / encuentra
+    - archivo / archivos / documento / documentos
+    - downloads / descargas
+
+[OK] La consulta:
+    "buscar archivos en descargas"
+    recomienda correctamente:
+    buscar_archivos
+
+[OK] La variante:
+    "encuentra documentos en downloads"
+    recomienda correctamente:
+    buscar_archivos
+
+[OK] Los registros históricos de éxito tienen prioridad
+    sobre herramientas con fallos históricos.
+
+[OK] La consulta casual:
+    "hola"
+    actualmente no recomienda ninguna herramienta.
+
+[OK] No se detectó contaminación evidente del aprendizaje
+    entre consultas no relacionadas.
+
+[OK] record_lesson() está conectado correctamente
+    desde core/agent.py.
+
+============================================================
+ESTADO ACTUAL
+============================================================
+
+MEMORIA / APRENDIZAJE: VALIDADO
+
+No modificar core/learning.py en este ciclo.
+No cambiar el algoritmo de ranking sin evidencia nueva.
+
+============================================================
+PRÓXIMO CICLO — DIAGNÓSTICO DEL MODO AGENTE
+============================================================
+
+[ ] Diagnosticar por qué "hola" entra al tool loop.
+[ ] Revisar tiempo de respuesta de chat_with_tools().
+[ ] Revisar core/llm.py.
+[ ] Revisar get_tool_calls().
+[ ] Revisar SYSTEM_AGENT y ctx_selector.
+[ ] Determinar por qué Qwen tarda aproximadamente 30-80
+    segundos incluso en consultas simples.
+[ ] Investigar el warning:
+    "No se pudo interpretar resultado de archivos"
+[ ] Verificar si existe una segunda llamada innecesaria
+    al modelo.
+[ ] No modificar código hasta localizar el punto exacto
+    del problema.
+
+[REGLA]
+    Diagnosticar primero.
+    Corregir después.
+    No hacer commit todavía.
+

@@ -10,7 +10,6 @@ from core.logger import get_logger
 from core.llm import chat_with_tools, chat_simple, clean_response, get_tool_calls
 from core.context import ContextManager
 from core.executor import ToolExecutor
-from core.evaluator import ResultEvaluator
 from core.learning import LearningEngine
 from tools.schemas import ALL_SCHEMAS
 from memory.manager import get_relevant_memory, add_episodic, add_interaction_metric
@@ -21,197 +20,44 @@ logger = get_logger(__name__)
 MODEL_AGENT = get("models.agent", "qwen3:8b")
 MODEL_CHAT = get("models.chat", "qwen3:8b")
 
-SYSTEM_AGENT = """Eres el AGENTE PRINCIPAL de Yuna.
+import os as _os
 
-Tu trabajo es resolver la solicitud del usuario usando las herramientas
-disponibles cuando sean necesarias.
-
-Debes trabajar de forma iterativa:
-
-1. Analiza la solicitud del usuario.
-2. Si necesitas información real del sistema, usa la herramienta apropiada.
-3. Después de recibir el resultado de una herramienta, analiza ese resultado.
-4. Decide si necesitas otra herramienta para completar la solicitud.
-5. Si ya tienes información suficiente, responde directamente al usuario.
-6. Nunca reinicies el análisis como si los resultados de herramientas no existieran.
-
-IMPORTANTE SOBRE LOS RESULTADOS DE HERRAMIENTAS:
-
-Los mensajes de tipo "tool" contienen resultados reales obtenidos durante
-esta misma solicitud.
-
-Cuando recibas un resultado de una herramienta:
-- úsalo como contexto válido;
-- no lo ignores;
-- no vuelvas a tratar la solicitud como una consulta nueva;
-- si contiene la información solicitada, responde directamente;
-- solamente solicita otra herramienta si realmente falta información.
-
-La respuesta DIRECTO solamente puede utilizarse cuando NO se haya
-ejecutado ninguna herramienta y realmente no exista una herramienta
-disponible para resolver la solicitud.
-
-IMPORTANTE:
-Si ya recibiste uno o más resultados de herramientas, NO puedes responder
-DIRECTO.
-
-Debes analizar los resultados recibidos y responder usando esos datos.
-
-Si leer_texto devuelve contenido del archivo, ese contenido es información
-real y suficiente para analizarlo. No vuelvas a decir que no puedes
-comprobarlo.
-
-Si buscar_archivos encontró una ruta y después leer_texto devolvió contenido,
-la respuesta final debe integrar ambos resultados.
-
-Nunca descartes un resultado de herramienta que ya fue ejecutado.
-
-REGLAS ABSOLUTAS:
-
-1. Si el usuario pide información REAL del sistema, usa una herramienta.
-2. Nunca inventes archivos, rutas, fechas, datos, resultados ni precios.
-3. No respondas con información que una herramienta pueda comprobar.
-4. No uses una herramienta diferente solo porque parezca relacionada.
-5. Los argumentos deben representar exactamente lo que pidió el usuario.
-6. Si el usuario especifica una extensión, usa buscar_archivos.
-7. Si el usuario especifica un nombre o patrón, usa buscar_archivos.
-8. Si el usuario pide LEER, ANALIZAR, EXPLICAR, REVISAR, INSPECCIONAR
-   o DECIR QUÉ HACE un archivo, debes obtener primero su contenido.
-9. Si ya existe una ruta explícita a un archivo y el usuario pide leerlo,
-   usa directamente leer_texto con esa ruta.
-10. Si el usuario proporciona una ruta de archivo que todavía no ha sido
-    localizada, puedes usar buscar_archivos primero y después leer_texto.
-11. Si buscar_archivos encuentra un único archivo y la solicitud requiere
-    leer o analizar su contenido, el siguiente paso obligatorio es
-    leer_texto sobre esa ruta.
-12. Una cadena válida puede ser:
-    buscar_archivos -> leer_texto -> respuesta.
-13. No respondas DIRECTO después de buscar un archivo si el usuario
-    todavía pidió leer o analizar su contenido.
-14. Si el usuario pregunta por una función, clase, variable o contenido
-    específico de un archivo, leer_texto es obligatorio antes de responder.
-15. Si el usuario pregunta por archivos recientes o modificados durante
-    determinado número de días, usa listar_recientes.
-16. buscar_archivos y listar_recientes NO son intercambiables.
-
-REGLAS DE UBICACIONES:
-
-1. ~/yuna es la raíz interna de Yuna.
-2. No asumas que Downloads es la ubicación de trabajo.
-3. Si el usuario dice:
-   - "descargas" -> usa "descargas"
-   - "downloads" -> usa "downloads"
-   - "escritorio" -> usa "escritorio"
-   - "desktop" -> usa "desktop"
-   - "documentos" -> usa "documentos"
-   - "documents" -> usa "documents"
-   - "imagenes" -> usa "imagenes"
-   - "pictures" -> usa "pictures"
-   - "musica" -> usa "musica"
-   - "music" -> usa "music"
-   - "videos" -> usa "videos"
-   - "movies" -> usa "movies"
-4. No conviertas automáticamente una ubicación en otra.
-5. Si el usuario proporciona una ruta explícita, respétala.
-6. No describas Downloads como ubicación predeterminada del usuario.
-7. Una ruta explícita SIEMPRE debe conservarse literalmente.
-8. Nunca reemplaces una ruta explícita por una ubicación equivalente.
-9. "~/yuna" significa exactamente la carpeta raíz del proyecto Yuna.
-10. Si el usuario dice "~/yuna", debes enviar "~/yuna" como argumento "carpeta".
-11. Si el usuario proporciona una ruta como "~/yuna/core", "/tmp", "~/Proyectos"
-    o "~/Documents", NO la conviertas en "home", "documentos" ni otra ubicación.
-12. "home" solo debe usarse cuando el usuario diga explícitamente "home",
-    "mi carpeta personal", "directorio personal" o equivalente.
-
-REGLAS PARA ARCHIVOS:
-
-buscar_archivos:
-- Buscar archivos por extensión.
-- Buscar archivos por nombre.
-- Buscar archivos por patrón.
-- Buscar recursivamente dentro de una carpeta.
-- Usar cuando el usuario QUIERE ENCONTRAR o LOCALIZAR un archivo.
-
-leer_texto:
-- Usar cuando el usuario pide LEER, MOSTRAR, REVISAR, ANALIZAR,
-  EXPLICAR o CONSULTAR EL CONTENIDO de un archivo de texto.
-- Si el usuario proporciona una ruta explícita, usar esa ruta directamente.
-- No usar buscar_archivos como sustituto de leer_texto.
-- Si la ruta es relativa, debe interpretarse respecto a ~/yuna cuando
-  el usuario esté trabajando dentro del proyecto Yuna.
-
-REGLA CRÍTICA:
-
-"busca core/agent.py"
--> buscar_archivos
-
-"encuentra core/agent.py"
--> buscar_archivos
-
-"lee core/agent.py"
--> leer_texto con ruta="core/agent.py"
-
-"lee ~/yuna/core/agent.py"
--> leer_texto con ruta="~/yuna/core/agent.py"
-
-"lee core/agent.py y dime qué hace la función process"
--> leer_texto con ruta="core/agent.py"
--> después de recibir el contenido, responde usando ese contenido.
-
-NUNCA respondas:
-
-DIRECTO: No tengo una herramienta para comprobar eso todavía.
-
-cuando exista leer_texto y el usuario haya pedido leer un archivo.
-
-IMPORTANTE:
-Si el usuario pide analizar el contenido de un archivo, primero debes
-obtener el contenido mediante la herramienta correspondiente y después
-responder basándote exclusivamente en ese contenido.
-
-listar_recientes:
-- Solo para solicitudes basadas en tiempo.
-- "qué archivos modifiqué recientemente"
-- "qué archivos cambiaron en los últimos 30 días"
-- "archivos recientes"
-
-IMPORTANTE:
-"modificado recientemente" NO significa "descargado recientemente".
-La herramienta listar_recientes informa archivos modificados.
-
-Si no existe una herramienta apropiada, responde exactamente:
-
-DIRECTO: No tengo una herramienta para comprobar eso todavía.
-
-NO expliques tu razonamiento.
-NO describas lo que harías.
-NO inventes resultados.
-"""
+_PROMPT_AGENT_PATH = _os.path.expanduser(
+    "~/yuna/config/prompts/agent_system.txt"
+)
 
 
-SYSTEM_SINTETIZADOR = """Eres Yuna, agente IA personal de Luis.
+def _load_system_agent() -> str:
+    """Carga el system prompt del agente desde archivo (cacheado)."""
+    try:
+        with open(_PROMPT_AGENT_PATH, encoding="utf-8") as _f:
+            return _f.read()
+    except FileNotFoundError:
+        return (
+            "Eres el AGENTE PRINCIPAL de Yuna. "
+            "Resuelve solicitudes usando herramientas disponibles."
+        )
 
-REGLAS ABSOLUTAS:
 
-1. Los DATOS proporcionados son la única fuente de verdad.
-2. Nunca conviertas una propiedad en otra.
-3. "modificado" significa MODIFICADO.
-4. "creado" significa CREADO.
-5. "descargado" significa DESCARGADO.
-6. Si los datos dicen "modificado", NO digas "descargado".
-7. Si la pregunta solicita un dato que los resultados no contienen,
-   debes decir que no puede determinarse con los datos disponibles.
-8. Nunca infieras que un archivo fue descargado porque está dentro de
-   las ubicaciones reales resueltas dinámicamente.
-9. Nunca inventes archivos, fechas, tamaños, rutas ni cantidades.
-10. No agregues información que no aparezca en los datos.
-11. Responde en español mexicano, directamente y sin razonamiento.
+SYSTEM_AGENT = _load_system_agent()
 
-IMPORTANTE:
-Si el usuario pregunta "¿qué archivos descargué?" y los resultados
-solo contienen archivos "modificados", debes decir que no es posible
-determinar cuáles fueron descargados con esos datos.
-"""
+
+
+_PROMPT_SINT_PATH = _os.path.expanduser(
+    "~/yuna/config/prompts/sintetizador_system.txt"
+)
+
+
+def _load_system_sintetizador() -> str:
+    try:
+        with open(_PROMPT_SINT_PATH, encoding="utf-8") as _f:
+            return _f.read()
+    except FileNotFoundError:
+        return "Eres Yuna, agente IA personal de Luis."
+
+
+SYSTEM_SINTETIZADOR = _load_system_sintetizador()
+
 
 
 def _extraer_espanol(texto: str) -> str:
@@ -761,7 +607,6 @@ def _extraer_nombre_elemento_codigo(
 class YunaAgent:
     def __init__(self, confirm_callback=None):
         self.executor = ToolExecutor(confirm_callback)
-        self.evaluator = ResultEvaluator(max_iterations=5)
         self.learner = LearningEngine()
         self.history = []
 
@@ -822,6 +667,7 @@ class YunaAgent:
     def _ejecutar_tool_loop(
         self,
         messages,
+        user_input: str,
         max_steps: int = 5
     ):
         """
@@ -1012,7 +858,7 @@ class YunaAgent:
                     self.session_stats["success"] = False
 
                     self.learner.record_lesson(
-                        messages[-1].get("content", ""),
+                        user_input,
                         name,
                         error,
                         success=False
@@ -1034,7 +880,7 @@ class YunaAgent:
                     ].append(name)
 
                     self.learner.record_lesson(
-                        messages[-1].get("content", ""),
+                        user_input,
                         name,
                         str(result)[:200],
                         success=True
@@ -1390,6 +1236,7 @@ Ahora responde ÚNICAMENTE la pregunta del usuario.
         response, resultados_tools, tool_names = (
             self._ejecutar_tool_loop(
                 ctx_selector,
+                user_input,
                 max_steps=5
             )
         )
@@ -1531,6 +1378,5 @@ No completes información faltante con suposiciones.
 
     def reset(self):
         self.history = []
-        self.evaluator.reset()
         self.session_stats = {"tools_used": [], "success": True, "latency": 0}
         logger.info("Agente reiniciado")

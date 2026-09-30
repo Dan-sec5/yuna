@@ -15,37 +15,12 @@ class LearningEngine:
         self._init_tables()
 
     def _init_tables(self):
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS lessons (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    query_pattern TEXT,
-                    tool_name TEXT,
-                    outcome TEXT,
-                    success BOOLEAN,
-                    count INTEGER DEFAULT 1
-                );
-                CREATE INDEX IF NOT EXISTS idx_lessons_pattern ON lessons(query_pattern);
-                CREATE INDEX IF NOT EXISTS idx_lessons_tool ON lessons(tool_name);
-                CREATE TABLE IF NOT EXISTS user_feedback (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    query TEXT,
-                    response TEXT,
-                    feedback TEXT,
-                    score INTEGER
-                );
-                CREATE TABLE IF NOT EXISTS interaction_metrics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    query TEXT,
-                    response TEXT,
-                    tools_used TEXT,
-                    success BOOLEAN,
-                    latency_ms REAL
-                );
-            """)
+        """
+        Las tablas las crea memory.manager.init_db().
+        Este método se conserva como no-op para no romper
+        instanciaciones existentes de LearningEngine.
+        """
+        pass
 
     def _normalize_learning_words(self, pattern: str) -> set:
         """

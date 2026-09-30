@@ -1,85 +1,77 @@
+"""
+interface/agent_cli.py
+
+Agente autónomo de Yuna con herramientas (terminal).
+La voz se centraliza en interface/voice.py — no duplicar hablar() aquí.
+"""
 import sys
 import os
-import subprocess
-import threading
+
 sys.path.insert(0, os.path.expanduser("~/yuna"))
+
+from rich.console import Console
 
 from core.agent import YunaAgent
 from core.llm import preload_model
 from memory.manager import init_db, add_episodic
-from config import get
+from interface.voice import hablar
 
-VOICE = get("voice.voice", "es-MX-DaliaNeural")
-MAX_CHARS = get("voice.max_chars", 300)
+console = Console()
 
-def hablar(texto: str):
-    def _hablar():
-        if not texto or not texto.strip():
-            return
-        try:
-            resultado = subprocess.run([
-                "edge-tts", "--voice", VOICE,
-                "--text", str(texto).strip()[:MAX_CHARS],
-                "--write-media", "/tmp/yuna_agent.mp3"
-            ], capture_output=True, timeout=15)
-            if resultado.returncode != 0:
-                return
-            if os.path.getsize("/tmp/yuna_agent.mp3") < 1024:
-                return
-            sistema = os.name
-            if sistema == 'posix' and os.uname().sysname == 'Darwin':
-                subprocess.run(["afplay", "/tmp/yuna_agent.mp3"], timeout=60)
-            else:
-                subprocess.run(["mpg123", "-q", "/tmp/yuna_agent.mp3"], timeout=60)
-        except Exception:
-            pass
-    threading.Thread(target=_hablar, daemon=True).start()
+POSITIVO = ("👍", "bien", "util", "up")
+NEGATIVO = ("👎", "mal", "inutil", "down")
+
 
 def main():
     init_db()
-    print("⏳ Precargando modelo en RAM...")
+    console.print("[dim]⏳ Precargando modelo en RAM...[/dim]")
     preload_model()
-    print("✅ Modelo listo.\n")
+    console.print("[green]✅ Modelo listo.[/green]\n")
 
     agente = YunaAgent()
-    saludo = "Hola Luis, modo agente activo. Puedo buscar archivos, analizar datos, consultar precios y mas."
-    print(f"🤖 Yuna Agente\n")
-    print(f"Yuna -> {saludo}\n")
+    saludo = "Hola Luis, modo agente activo. Puedo buscar archivos, analizar datos, consultar precios y más."
+    console.print(f"[bold green]Yuna Agente[/bold green]\n")
+    console.print(f"[green]Yuna[/green] → {saludo}\n")
     hablar(saludo)
-    print("(escribe 'salir' para terminar, 'reset' para nueva sesion, '👍' o '👎' despues de una respuesta)\n")
+    console.print("[dim](salir: terminar · reset: nueva sesión · 👍/👎: feedback)[/dim]\n")
 
     ultima_query = ""
     while True:
         try:
-            entrada = input("Luis -> ").strip()
+            entrada = input("Luis → ").strip()
         except (EOFError, KeyboardInterrupt):
             break
+
         if not entrada:
             continue
-        if entrada.lower() == "salir":
+        low = entrada.lower()
+
+        if low in ("salir", "exit", "quit"):
             hablar("Hasta luego Luis.")
-            print("Yuna -> Hasta luego Luis.")
+            console.print("[green]Yuna[/green] → Hasta luego Luis.")
             break
-        if entrada.lower() == "reset":
+        if low == "reset":
             agente.reset()
-            print("✓ Sesion reiniciada\n")
+            console.print("[green]✓ Sesión reiniciada[/green]\n")
             continue
-        if entrada in ("👍", "bien", "util", "up"):
+        if entrada in POSITIVO:
             if ultima_query:
                 agente.provide_feedback(ultima_query, "positive")
-                print("✓ Feedback positivo registrado para aprendizaje\n")
+                console.print("[green]✓ Feedback positivo registrado[/green]\n")
             continue
-        if entrada in ("👎", "mal", "inutil", "down"):
+        if entrada in NEGATIVO:
             if ultima_query:
                 agente.provide_feedback(ultima_query, "negative")
-                print("✓ Feedback negativo registrado. Intentare mejorar.\n")
+                console.print("[yellow]✓ Feedback negativo registrado. Intentaré mejorar.[/yellow]\n")
             continue
-        print("⏳ Procesando...\n")
+
+        console.print("[dim]⏳ Procesando...[/dim]\n")
         ultima_query = entrada
         respuesta = agente.process(entrada)
         add_episodic("agente", f"Luis: {entrada[:100]} | Yuna: {respuesta[:100]}")
-        print(f"Yuna -> {respuesta}\n")
+        console.print(f"[bold green]Yuna[/bold green] → {respuesta}\n")
         hablar(respuesta)
+
 
 if __name__ == "__main__":
     main()
