@@ -16,8 +16,14 @@ if ! command -v ollama &> /dev/null; then
 fi
 
 # Modelo por defecto
-echo "📥 Descargando modelo qwen3:8b..."
+echo "📥 Descargando modelo base qwen3:8b..."
 ollama pull qwen3:8b
+
+# Crear el modelo personalizado de Yuna (maid:latest) desde el Modelfile
+if [ -f Modelfile ]; then
+    echo "🎀 Creando modelo maid:latest con la personalidad de Yuna..."
+    ollama create maid:latest -f Modelfile
+fi
 
 # Dependencias Python
 echo "📦 Instalando dependencias Python..."

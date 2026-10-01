@@ -48,7 +48,7 @@ Responde en espanol, de forma concisa y estructurada."""
 
     respuesta = chat_simple(
         [{"role": "user", "content": prompt}],
-        model=CONFIG.get("models", {}).get("agent", "qwen3:8b"),
+        model=CONFIG.get("models", {}).get("agent", "maid:latest"),
         num_predict=400,
         temperature=0.3
     )
