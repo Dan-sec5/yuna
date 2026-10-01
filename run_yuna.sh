@@ -11,4 +11,7 @@ fi
 
 cd "$YUNA_DIR" || exit 1
 
+export OLLAMA_MODEL="maid"
+export MODEL="maid"
+
 exec "$PYTHON" "$YUNA_DIR/app.py" "$@"

@@ -1207,8 +1207,10 @@ Ahora responde ÚNICAMENTE la pregunta del usuario.
                 )
             )
 
-        ctx_selector = [{"role": "system", "content": SYSTEM_AGENT}]
+        ctx_selector = [{"role": "system", "content": SYSTEM_AGENT}] if (SYSTEM_AGENT and SYSTEM_AGENT.strip()) else []
         if memoria:
+            if not ctx_selector:
+                ctx_selector.append({"role": "system", "content": ""})
             ctx_selector[0]["content"] += (
                 "\n\nCONTEXTO SECUNDARIO:\n"
                 "Este contexto puede ayudar a comprender la solicitud, "
@@ -1218,9 +1220,7 @@ Ahora responde ÚNICAMENTE la pregunta del usuario.
             )
         for msg in self.history[-4:]:
             ctx_selector.append(msg)
-        ctx_selector.append({"role": "user", "content": user_input})
 
-        # ---------------------------------------------------------
         # TOOL LOOP MULTI-STEP
         # ---------------------------------------------------------
         #

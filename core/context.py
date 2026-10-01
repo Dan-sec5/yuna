@@ -8,7 +8,10 @@ class ContextManager:
         self.messages = []
 
     def add_system(self, content: str):
-        self.messages = [{"role": "system", "content": content}]
+        if content and content.strip():
+            self.messages = [{"role": "system", "content": content.strip()}]
+        else:
+            self.messages = []
 
     def add_user(self, content: str):
         self.messages.append({"role": "user", "content": content})

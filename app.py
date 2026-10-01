@@ -62,7 +62,7 @@ def main():
             accion = opciones[eleccion][0]
             if accion == "salir":
                 import subprocess
-                subprocess.run(["ollama", "stop", "qwen3:8b"], capture_output=True)
+                subprocess.run(["ollama", "stop", CONFIG.get('models', {}).get('chat', 'qwen3:8b')], capture_output=True)
                 console.print("[green]Hasta luego, Luis.[/green]")
                 break
             elif accion == "logs":

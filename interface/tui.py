@@ -545,7 +545,7 @@ class YunaTUI(App):
                 yield Static(
                     "SYSTEM\n"
                     "──────────────────\n"
-                    "MODEL     [#13e7ff]qwen3:8b[/]\n"
+                    f"MODEL     [#13e7ff]{(CONFIG.get('models') or {}).get('chat', 'maid:latest')}[/]\n"
                     "MEMORY    [#48ff91]READY[/]\n"
                     "PLANNER   [#48ff91]READY[/]\n"
                     "TOOLS     [#ffe66d]07[/]\n"
@@ -731,7 +731,7 @@ class YunaTUI(App):
         stats.update(
             "SYSTEM\n"
             "──────────────────\n"
-            "MODEL     [#13e7ff]qwen3:8b[/]\n"
+            f"MODEL     [#13e7ff]{(CONFIG.get('models') or {}).get('chat', 'maid:latest')}[/]\n"
             "MEMORY    [#48ff91]READY[/]\n"
             "PLANNER   [#48ff91]READY[/]\n"
             "TOOLS     [#ffe66d]07[/]\n"
