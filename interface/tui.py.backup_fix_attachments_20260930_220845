@@ -833,13 +833,12 @@ class YunaTUI(App):
             widget.update("")
             return
 
-        content = Text("ADJUNTOS", style="#13e7ff")
+        lines = ["[#13e7ff]ADJUNTOS[/]"]
 
         for path in self._attached_files:
-            content.append("\n• ", style="#9cb0bf")
-            content.append(path.name, style="#9cb0bf")
+            lines.append(f"[#9cb0bf]•[/] {path.name}")
 
-        widget.update(content)
+        widget.update("\n".join(lines), markup=True)
 
     def action_clear_log(self) -> None:
         self.query_one("#log", RichLog).clear()
