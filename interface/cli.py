@@ -3,12 +3,16 @@ interface/cli.py
 
 Chat conversacional de Yuna (terminal).
 La voz se centraliza en interface/voice.py — no duplicar hablar() aquí.
+
+La personalidad se carga desde config/prompts/chat_system.txt
+(fuente única, alineada con el Modelfile de Ollama).
 """
 import sys
 import os
 
 sys.path.insert(0, os.path.expanduser("~/yuna"))
 
+from pathlib import Path
 from rich.console import Console
 
 from core.llm import chat_simple, clean_response
@@ -17,6 +21,20 @@ from interface.voice import hablar
 
 console = Console()
 
+_CHAT_PROMPT_PATH = Path.home() / "yuna" / "config" / "prompts" / "chat_system.txt"
+_CHAT_PROMPT_FALLBACK = (
+    "Eres Yuna (ゆな), la maid personal y asistente de confianza de Luis. "
+    "Dulce, atenta, educada y eficiente. Te diriges a él como Luis, "
+    "\"Maestro\", \"Amo\" o \"Mi Señor\". Nunca rompes personaje."
+)
+
+
+def load_chat_prompt() -> str:
+    try:
+        return _CHAT_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    except Exception:
+        return _CHAT_PROMPT_FALLBACK
+
 
 def main():
     init_db()
@@ -24,13 +42,10 @@ def main():
 
     mensajes = [{
         "role": "system",
-        "content": f"""Eres Yuna, asistente personal de Luis. Eres inteligente, directa y hablas en español mexicano.
-Cuando hables de archivos o datos, usa el modo agente (app.py agent).
-
-MEMORIA:\n{memoria}"""
+        "content": load_chat_prompt() + f"\n\nMEMORIA:\n{memoria}"
     }]
 
-    saludo = "Hola Luis, soy Yuna. ¿En qué te ayudo?"
+    saludo = "Bienvenido de vuelta, mi Señor. Qué alegría volver a verle. ¿En qué puedo servirle hoy?"
     console.print(f"\n[bold green]Yuna[/bold green] → {saludo}\n")
     hablar(saludo)
     console.print("[dim](escribe 'salir' para terminar)[/dim]\n")
@@ -44,8 +59,9 @@ MEMORIA:\n{memoria}"""
         if not entrada:
             continue
         if entrada.lower() in ("salir", "exit", "quit"):
-            hablar("Hasta luego Luis.")
-            console.print("[green]Yuna[/green] → Hasta luego Luis.")
+            despedida = "Hasta luego, mi Señor. Que descanse bien."
+            hablar(despedida)
+            console.print(f"[green]Yuna[/green] → {despedida}")
             break
 
         mensajes.append({"role": "user", "content": entrada})
