@@ -11,7 +11,7 @@ fi
 
 cd "$YUNA_DIR" || exit 1
 
-export OLLAMA_MODEL="maid"
-export MODEL="maid"
+# El modelo se define en un solo lugar: config/config.json
+# Para cambiarlo: python set_model.py <modelo>
 
 exec "$PYTHON" "$YUNA_DIR/app.py" "$@"

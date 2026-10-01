@@ -9,8 +9,8 @@ from config import CONFIG
 
 logger = get_logger(__name__)
 
-MODEL_AGENT = CONFIG["models"].get("agent", "qwen3:8b")
-MODEL_CHAT = CONFIG["models"].get("chat", "qwen3:8b")
+MODEL_AGENT = CONFIG["models"].get("agent", "maid:latest")
+MODEL_CHAT = CONFIG["models"].get("chat", "maid:latest")
 OLLAMA_HOST = CONFIG["ollama"].get("host", "http://localhost:11434")
 KEEP_ALIVE = CONFIG["ollama"].get("keep_alive", "30m")
 TIMEOUT = CONFIG["ollama"].get("timeout", 120)
@@ -20,7 +20,7 @@ client = ollama.Client(host=OLLAMA_HOST, timeout=TIMEOUT)
 
 
 def _is_thinking_model(model: str) -> bool:
-    thinking_models = ["qwen3", "deepseek-r1", "deepseek-v3", "gemma4", "gpt-oss"]
+    thinking_models = ["qwen3", "deepseek-r1", "deepseek-v3", "gemma4", "gpt-oss", "maid", "yuna", "ornith"]
     return any(tm in model.lower() for tm in thinking_models)
 
 
