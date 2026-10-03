@@ -24,3 +24,31 @@ backups/
 .trash/
 prueba_*.txt
 *.tmp
+
+# Python / tests
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Backups temporales
+*.bak
+*.bak_*
+*.backup_*
+*.save
+*.orig
+*.old
+*.tmp
+.backup_*/
+
+# Desarrollo temporal
+prueba_*
+aplicar_*.sh
+
+# Papelera local de Yuna
+.trash/
+
+# Runtime
+logs/
+data/*.db

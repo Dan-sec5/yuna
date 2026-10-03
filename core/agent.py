@@ -8,7 +8,6 @@ import time
 import logging
 from core.logger import get_logger
 from core.llm import chat_with_tools, chat_simple, clean_response, get_tool_calls
-from core.context import ContextManager
 from core.executor import ToolExecutor
 from core.learning import LearningEngine
 from tools.schemas import ALL_SCHEMAS

@@ -38,34 +38,6 @@ def test_get_tool_calls_dict():
     assert calls[0]["name"] == "precio_activo"
     assert calls[0]["arguments"]["ticker"] == "AAPL"
 
-def test_evaluator_max_iterations():
-    from core.evaluator import ResultEvaluator
-    ev = ResultEvaluator(max_iterations=3)
-    calls = [{"name": "test", "arguments": {}}]
-    assert ev.should_continue(calls, "") == True
-    assert ev.should_continue(calls, "") == True
-    assert ev.should_continue(calls, "") == True
-    assert ev.should_continue(calls, "") == False
-
-def test_evaluator_reset():
-    from core.evaluator import ResultEvaluator
-    ev = ResultEvaluator(max_iterations=2)
-    calls = [{"name": "test"}]
-    ev.should_continue(calls, "")
-    ev.should_continue(calls, "")
-    ev.reset()
-    assert ev.should_continue(calls, "") == True
-
-def test_context_manager():
-    from core.context import ContextManager
-    ctx = ContextManager()
-    ctx.add_system("Sistema")
-    ctx.add_user("Pregunta")
-    ctx.add_assistant("Respuesta")
-    context = ctx.get_context()
-    assert context[0]["role"] == "system"
-    assert len(context) >= 2
-
 
 def test_get_tool_calls_textual_fallback():
     from core.llm import get_tool_calls
