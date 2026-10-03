@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Tuple
 from tools.registry import TOOLS
 from tools.permisos import check_permission, PermissionLevel
 from tools.schemas import get_schema
+from core.tool_validation import validate_tool_args
+from core.tool_result import tool_result_ok
 
 logger = get_logger(__name__)
 
@@ -17,17 +19,68 @@ class ToolExecutor:
         return resp == "s"
 
     def execute(self, tool_name: str, args: dict) -> Tuple[Any, Any]:
+
+        # -----------------------------------------------------
+        # Existencia
+        # -----------------------------------------------------
+
         if tool_name not in TOOLS:
-            return f"Error: herramienta '{tool_name}' no existe", None
+            return (
+                f"Error: herramienta '{tool_name}' no existe",
+                None,
+            )
+
+        # -----------------------------------------------------
+        # Validación de argumentos ANTES de permisos/ejecución
+        # -----------------------------------------------------
+
+        schema = get_schema(tool_name)
+
+        validation_errors = validate_tool_args(
+            tool_name,
+            args,
+            schema,
+        )
+
+        if validation_errors:
+
+            detalle = " | ".join(
+                validation_errors
+            )
+
+            logger.error(
+                "Argumentos inválidos para %s: %s",
+                tool_name,
+                detalle,
+            )
+
+            return (
+                f"Error de validación: {detalle}",
+                None,
+            )
+
+        # -----------------------------------------------------
+        # Permisos
+        # -----------------------------------------------------
 
         perm = check_permission(tool_name)
 
         if perm == PermissionLevel.DANGEROUS:
-            return f"Error: '{tool_name}' es peligrosa y no está autorizada", None
+            return (
+                f"Error: '{tool_name}' es peligrosa "
+                "y no está autorizada",
+                None,
+            )
 
         if perm == PermissionLevel.CONFIRM:
-            if not self.confirm_callback(tool_name, args):
-                return "Cancelado por el usuario", None
+            if not self.confirm_callback(
+                tool_name,
+                args,
+            ):
+                return (
+                    "Cancelado por el usuario",
+                    None,
+                )
 
         # Seguridad: organizar_archivos sin carpeta = cancelar
         if tool_name == "organizar_archivos" and not args.get("carpeta_origen"):
@@ -38,7 +91,29 @@ class ToolExecutor:
             func = TOOLS[tool_name]
             # Pasar argumentos como kwargs (dict) — formato nativo de Ollama tool calling
             result = func(**args) if args else func()
-            logger.info(f"Tool {tool_name} OK | resultado: {str(result)[:100]}")
+
+            # Una tool histórica puede devolver un string que comienza
+            # con "Error", "⚠", "⛔", etc. Eso NO debe registrarse
+            # como ejecución exitosa.
+            if not tool_result_ok(result):
+
+                logger.error(
+                    "Tool %s devolvió resultado de error: %s",
+                    tool_name,
+                    str(result)[:200],
+                )
+
+                return (
+                    f"Error reportado por la herramienta: {result}",
+                    result,
+                )
+
+            logger.info(
+                "Tool %s OK | resultado: %s",
+                tool_name,
+                str(result)[:100],
+            )
+
             return None, result
         except TypeError as e:
             logger.error(f"Error de argumentos en {tool_name}: {e} | args: {args}")
