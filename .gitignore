@@ -18,3 +18,9 @@ logs/*.log
 *.bak*
 .backup_optimizacion_*/
 .pytest_cache/
+
+# Yuna local runtime / development
+backups/
+.trash/
+prueba_*.txt
+*.tmp
