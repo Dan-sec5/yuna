@@ -789,13 +789,6 @@ class YunaTUI(App):
 
     def on_mount(self) -> None:
         self.query_one("#command", Input).focus()
-
-        # Inicializar realmente el agente.
-        #
-        # _mode comienza como "agent", pero eso por sí solo no
-        # crea YunaAgent. Sin esta llamada self._agent permanece
-        # en None y AgentBridge termina usando chat_simple().
-        self.bridge.set_mode("agent")
         log = self.query_one("#log", RichLog)
         log.write(
             f"[bold #ff2ed1]╔══ {CONFIG.get('titulo', 'Y  U  N  A')} ══╗[/]"

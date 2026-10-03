@@ -1,4 +1,3 @@
-from pathlib import Path
 import sys, os
 sys.path.insert(0, os.path.expanduser("~/yuna"))
 import pytest
@@ -88,7 +87,7 @@ def test_permisos_safe():
 
 def test_permisos_confirm():
     assert check_permission("organizar_archivos") == PermissionLevel.CONFIRM
-    assert check_permission("crear_archivo") == PermissionLevel.SAFE
+    assert check_permission("crear_archivo") == PermissionLevel.CONFIRM
 
 def test_permisos_dangerous():
     assert check_permission("herramienta_desconocida") == PermissionLevel.DANGEROUS
@@ -125,106 +124,3 @@ def test_buscar_archivos_yuna_excluye_directorios_no_activos():
         assert "/legacy/" not in ruta_normalizada
         assert "/.git/" not in ruta_normalizada
         assert "/__pycache__/" not in ruta_normalizada
-
-
-# ─── tests/tools/desarrollo ─────────────────────────────────
-
-from tools.desarrollo import editar_archivo, ejecutar_python, inspeccionar_proyecto
-
-
-def test_editar_archivo_reemplaza_y_crea_backup(tmp_path):
-    archivo = tmp_path / "demo.txt"
-    archivo.write_text("hola mundo", encoding="utf-8")
-
-    resultado = editar_archivo(
-        str(archivo),
-        "reemplazar_texto",
-        contenido="Yuna",
-        buscar="mundo",
-    )
-
-    assert resultado["ok"] is True
-    assert archivo.read_text(encoding="utf-8") == "hola Yuna"
-    assert os.path.exists(resultado["backup"])
-
-
-def test_editar_archivo_rechaza_coincidencia_ambigua(tmp_path):
-    archivo = tmp_path / "demo.txt"
-    archivo.write_text("x x", encoding="utf-8")
-
-    with pytest.raises(ValueError):
-        editar_archivo(
-            str(archivo),
-            "reemplazar_texto",
-            contenido="y",
-            buscar="x",
-        )
-
-
-def test_ejecutar_python_archivo(tmp_path):
-    script = tmp_path / "ok.py"
-    script.write_text('print("YUNA_OK")', encoding="utf-8")
-
-    resultado = ejecutar_python(
-        str(script),
-        modo="archivo",
-        cwd=str(tmp_path),
-        timeout=10,
-    )
-
-    assert resultado["ok"] is True
-    assert "YUNA_OK" in resultado["stdout"]
-
-
-def test_inspeccionar_proyecto(tmp_path):
-    (tmp_path / "demo.py").write_text(
-        "import os\n\ndef hola():\n    return 1\n\nclass Demo:\n    pass\n",
-        encoding="utf-8",
-    )
-
-    resultado = inspeccionar_proyecto(str(tmp_path), profundidad=2)
-
-    assert resultado["archivos_analizados"] >= 1
-    assert any(x["archivo"] == "demo.py" for x in resultado["python"])
-
-
-
-def test_eliminar_y_restaurar_archivo(tmp_path):
-    from tools.archivos import eliminar_archivo, restaurar_archivo
-
-    # La tool solo permite directorios autorizados; usamos /tmp.
-    ruta = Path("/tmp") / "yuna_test_trash.txt"
-    ruta.write_text("hola papelera", encoding="utf-8")
-
-    eliminado = eliminar_archivo(str(ruta))
-    assert isinstance(eliminado, dict)
-    assert eliminado["ok"] is True
-    assert eliminado["accion"] == "movido_a_papelera"
-    assert eliminado["token"]
-    assert ruta.exists() is False
-    assert not ruta.exists()
-
-    token = eliminado["token"]
-    restaurado = restaurar_archivo(token)
-
-    assert "Archivo restaurado" in restaurado
-    assert ruta.exists()
-    assert ruta.read_text(encoding="utf-8") == "hola papelera"
-
-    ruta.unlink(missing_ok=True)
-
-
-def test_eliminar_archivo_no_borra_carpetas():
-    from tools.archivos import eliminar_archivo
-
-    resultado = eliminar_archivo("~/yuna/tools")
-    assert isinstance(resultado, dict)
-    assert resultado["ok"] is False
-    assert resultado["error"] == "solo_archivos"
-
-
-def test_permisos_papelera_requieren_confirmacion():
-    from tools.permisos import check_permission, PermissionLevel
-
-    assert check_permission("eliminar_archivo") == PermissionLevel.CONFIRM
-    assert check_permission("restaurar_archivo") == PermissionLevel.CONFIRM

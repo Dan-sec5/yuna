@@ -54,11 +54,3 @@ def test_bash_blocks_private_home_directories():
 
 def test_detectar_descargas_es_safe():
     assert check_permission("detectar_descargas") == PermissionLevel.SAFE
-
-
-
-def test_dev_tools_permissions():
-    assert check_permission("inspeccionar_proyecto") == PermissionLevel.SAFE
-    assert check_permission("editar_archivo") == PermissionLevel.CONFIRM
-    assert check_permission("ejecutar_python") == PermissionLevel.CONFIRM
-    assert check_permission("crear_archivo") == PermissionLevel.SAFE

@@ -65,3 +65,75 @@ def test_context_manager():
     context = ctx.get_context()
     assert context[0]["role"] == "system"
     assert len(context) >= 2
+
+
+def test_get_tool_calls_textual_fallback():
+    from core.llm import get_tool_calls
+
+    resp = {
+        "message": {
+            "content": """
+<tool>
+{"name": "info_sistema", "arguments": {}}
+</tool>
+"""
+        }
+    }
+
+    calls = get_tool_calls(resp)
+
+    assert len(calls) == 1
+    assert calls[0]["name"] == "info_sistema"
+    assert calls[0]["arguments"] == {}
+
+
+def test_get_tool_calls_textual_with_args():
+    from core.llm import get_tool_calls
+
+    resp = {
+        "message": {
+            "content": """
+<tool>
+{"name": "crear_archivo", "arguments": {
+    "ruta": "~/yuna/test.txt",
+    "contenido": "hola"
+}}
+</tool>
+"""
+        }
+    }
+
+    calls = get_tool_calls(resp)
+
+    assert len(calls) == 1
+    assert calls[0]["name"] == "crear_archivo"
+    assert calls[0]["arguments"]["ruta"] == "~/yuna/test.txt"
+
+
+def test_native_tool_calls_have_priority():
+    from core.llm import get_tool_calls
+
+    resp = {
+        "message": {
+            "content": """
+<tool>
+{"name": "info_sistema", "arguments": {}}
+</tool>
+""",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "precio_activo",
+                        "arguments": {
+                            "ticker": "AAPL"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+    calls = get_tool_calls(resp)
+
+    assert len(calls) == 1
+    assert calls[0]["name"] == "precio_activo"

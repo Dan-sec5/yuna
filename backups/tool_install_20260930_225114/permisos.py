@@ -23,14 +23,9 @@ _PERMISSIONS = {
     "consultar_memoria": PermissionLevel.SAFE,
     "escribir_memoria": PermissionLevel.SAFE,
     "notificar": PermissionLevel.SAFE,
-    "inspeccionar_proyecto": PermissionLevel.SAFE,
     "organizar_archivos": PermissionLevel.CONFIRM,
-    "eliminar_archivo": PermissionLevel.CONFIRM,
-    "restaurar_archivo": PermissionLevel.CONFIRM,
     "crear_archivo": PermissionLevel.SAFE,
     "ejecutar_bash_seguro": PermissionLevel.CONFIRM,
-    "editar_archivo": PermissionLevel.CONFIRM,
-    "ejecutar_python": PermissionLevel.CONFIRM,
 }
 
 _BASH_WHITELIST = {"ls", "cat", "echo", "pwd", "head", "tail", "grep", "find", "wc", "date", "du", "df", "top", "ps", "lsof", "uname", "uptime", "whoami", "which"}

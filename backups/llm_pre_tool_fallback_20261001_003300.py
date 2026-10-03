@@ -2,7 +2,6 @@
 core/llm.py — Wrapper Ollama con think=False para Qwen3
 """
 import ollama
-import json
 import re
 from core.logger import get_logger
 from typing import List, Dict, Any, Optional
@@ -117,190 +116,32 @@ def clean_response(response: Any) -> str:
     return content.strip()
 
 
-def _extract_text_tool_calls(content: str) -> List[Dict]:
-    """
-    Fallback para modelos que escriben llamadas de herramientas
-    dentro del contenido en vez de usar tool_calls nativos.
-
-    Formato esperado:
-
-        <tool>
-        {"name": "info_sistema", "arguments": {}}
-        </tool>
-    """
-    if not content:
-        return []
-
-    result = []
-
-    bloques = re.findall(
-        r"<tool>\s*(.*?)\s*</tool>",
-        content,
-        flags=re.DOTALL | re.IGNORECASE,
-    )
-
-    for bloque in bloques:
-        try:
-            data = json.loads(bloque.strip())
-        except (json.JSONDecodeError, TypeError):
-            logger.warning(
-                "Tool textual ignorada por JSON inválido: %r",
-                bloque[:200],
-            )
-            continue
-
-        if not isinstance(data, dict):
-            continue
-
-        name = data.get("name")
-        arguments = data.get("arguments", {})
-
-        if not isinstance(name, str) or not name.strip():
-            continue
-
-        if arguments is None:
-            arguments = {}
-
-        if not isinstance(arguments, dict):
-            logger.warning(
-                "Tool textual %s ignorada: arguments no es dict",
-                name,
-            )
-            continue
-
-        result.append({
-            "name": name.strip(),
-            "arguments": arguments,
-        })
-
-    return result
-
-
-def _message_content(response: Any) -> str:
-    """Obtiene de forma uniforme el contenido textual del mensaje."""
-    if response is None:
-        return ""
-
-    if hasattr(response, "message"):
-        return getattr(
-            response.message,
-            "content",
-            "",
-        ) or ""
-
-    if isinstance(response, dict):
-        return (
-            response.get("message", {})
-            .get("content", "")
-            or ""
-        )
-
-    return ""
-
-
 def get_tool_calls(response: Any) -> List[Dict]:
-    """
-    Extrae llamadas de herramientas.
-
-    Prioridad:
-    1. tool_calls nativos de Ollama.
-    2. Fallback textual <tool>{JSON}</tool>.
-    """
     if response is None:
         return []
-
-    result = []
-
-    # ---------------------------------------------------------
-    # 1. Tool calling nativo
-    # ---------------------------------------------------------
-
     if hasattr(response, "message"):
-        calls = (
-            getattr(
-                response.message,
-                "tool_calls",
-                None
-            )
-            or []
-        )
-
+        calls = getattr(response.message, "tool_calls", None) or []
+        result = []
         for call in calls:
-            func = getattr(
-                call,
-                "function",
-                None
-            )
-
+            func = getattr(call, "function", None)
             if not func:
                 continue
-
-            name = getattr(
-                func,
-                "name",
-                None
-            )
-
-            arguments = getattr(
-                func,
-                "arguments",
-                {},
-            ) or {}
-
+            name = getattr(func, "name", None)
+            arguments = getattr(func, "arguments", {}) or {}
             if name:
-                result.append({
-                    "name": name,
-                    "arguments": arguments,
-                })
-
-    elif isinstance(response, dict):
-        msg = response.get(
-            "message",
-            {}
-        )
-
-        calls = msg.get(
-            "tool_calls"
-        ) or []
-
-        for call in calls:
-            func = call.get(
-                "function",
-                {}
-            )
-
-            name = func.get("name")
-
-            if name:
-                result.append({
-                    "name": name,
-                    "arguments": func.get(
-                        "arguments",
-                        {},
-                    ) or {},
-                })
-
-    # Si Ollama produjo tool_calls reales, son la fuente principal.
-    if result:
+                result.append({"name": name, "arguments": arguments})
         return result
-
-    # ---------------------------------------------------------
-    # 2. Fallback textual para modelos como maid:latest
-    # ---------------------------------------------------------
-
-    content = _message_content(
-        response
-    )
-
-    textual = _extract_text_tool_calls(
-        content
-    )
-
-    if textual:
-        logger.info(
-            "Detectadas %d tool(s) mediante fallback textual",
-            len(textual),
-        )
-
-    return textual
-
+    if isinstance(response, dict):
+        msg = response.get("message", {})
+        calls = msg.get("tool_calls") or []
+        result = []
+        for call in calls:
+            func = call.get("function", {})
+            name = func.get("name")
+            if name:
+                result.append({
+                    "name": name,
+                    "arguments": func.get("arguments", {})
+                })
+        return result
+    return []

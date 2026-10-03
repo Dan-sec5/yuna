@@ -1,11 +1,9 @@
 from tools.archivos import (
-    buscar_archivos, listar_recientes, detectar_descargas, organizar_por_tipo, leer_texto,
-    eliminar_archivo, restaurar_archivo
+    buscar_archivos, listar_recientes, detectar_descargas, organizar_por_tipo, leer_texto
 )
 from tools.datos import leer_excel, leer_csv, leer_pdf
 from tools.web import buscar_web, precio_activo, noticias_financieras_mx
 from tools.sistema import info_sistema, notificar, crear_archivo, ejecutar_bash_seguro
-from tools.desarrollo import editar_archivo, ejecutar_python, inspeccionar_proyecto
 from memory.manager import consultar_memoria, escribir_memoria
 
 TOOLS = {
@@ -14,8 +12,6 @@ TOOLS = {
     "detectar_descargas": detectar_descargas,
     "organizar_archivos": organizar_por_tipo,
     "leer_texto": leer_texto,
-    "eliminar_archivo": eliminar_archivo,
-    "restaurar_archivo": restaurar_archivo,
     "leer_excel": leer_excel,
     "leer_csv": leer_csv,
     "leer_pdf": leer_pdf,
@@ -28,9 +24,6 @@ TOOLS = {
     "consultar_memoria": consultar_memoria,
     "escribir_memoria": escribir_memoria,
     "ejecutar_bash_seguro": ejecutar_bash_seguro,
-    "editar_archivo": editar_archivo,
-    "ejecutar_python": ejecutar_python,
-    "inspeccionar_proyecto": inspeccionar_proyecto,
 }
 
 def get_tool(name: str):

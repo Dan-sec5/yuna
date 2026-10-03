@@ -1,70 +1,154 @@
+import json
 import os
 import sys
-import sqlite3
 from datetime import datetime
-from pathlib import Path
 
 sys.path.insert(0, os.path.expanduser("~/yuna"))
 
-from memory.manager import DB_PATH, get_all_preferencias, get_episodic
-from core.llm import chat_simple
+from config import get
+from core.llm import chat_simple, clean_response
+from memory.manager import (
+    DB_PATH,
+    get_all_preferencias,
+    get_episodic,
+    set_preferencia,
+)
+
+
+MODEL_AGENT = get("models.agent", "maid:latest")
+
 
 def main():
     if not DB_PATH.exists():
-        print("No hay base de datos. Usa yuna-chat primero.")
+        print("No hay base de datos. Usa Yuna primero.")
         return
 
-    # Obtener datos de SQLite
-    prefs = get_all_preferencias()
+    preferencias = get_all_preferencias()
     episodic = get_episodic(100)
 
     if not episodic:
         print("No hay suficientes datos para analizar.")
         return
 
-    # Construir contexto de aprendizaje
+    # ---------------------------------------------------------
+    # Construir resumen de actividad
+    # ---------------------------------------------------------
+
     bitacora_resumen = []
-    for e in episodic:
-        detalles = e.get('detalles', '{}')
+
+    for evento in episodic:
+        detalles = evento.get("detalles", "{}")
+
         try:
-            import json
-            d = json.loads(detalles)
-            bitacora_resumen.append(f"- {e['fecha']}: {d.get('user', e['evento'])}")
-        except:
-            bitacora_resumen.append(f"- {e['fecha']}: {e['evento']}")
+            datos = json.loads(detalles)
 
-    prompt = f"""Analiza esta bitacora de conversaciones y extrae:
-1. Las tareas que Luis hace con mas frecuencia
-2. Los horarios en que mas usa el asistente
-3. Sus temas de trabajo mas comunes
-4. Sugerencias de automatizacion utiles para el
+            texto_usuario = datos.get(
+                "user",
+                evento.get("evento", "")
+            )
 
-Bitacora:
+        except (json.JSONDecodeError, TypeError):
+            texto_usuario = evento.get("evento", "")
+
+        fecha = evento.get("fecha", "sin fecha")
+
+        bitacora_resumen.append(
+            f"- {fecha}: {texto_usuario}"
+        )
+
+    # ---------------------------------------------------------
+    # Preferencias conocidas
+    # ---------------------------------------------------------
+
+    preferencias_resumen = []
+
+    if isinstance(preferencias, dict):
+        for clave, valor in list(preferencias.items())[:30]:
+            preferencias_resumen.append(
+                f"- {clave}: {valor}"
+            )
+
+    elif preferencias:
+        preferencias_resumen.append(str(preferencias)[:3000])
+
+    contexto_preferencias = (
+        "\n".join(preferencias_resumen)
+        if preferencias_resumen
+        else "Sin preferencias registradas."
+    )
+
+    # ---------------------------------------------------------
+    # Prompt de aprendizaje
+    # ---------------------------------------------------------
+
+    prompt = f"""
+Analiza el historial de uso de Yuna.
+
+Identifica:
+
+1. Las tareas que Luis realiza con mayor frecuencia.
+2. Los temas que consulta habitualmente.
+3. Herramientas de Yuna que parecen ser más útiles.
+4. Patrones recurrentes de trabajo.
+5. Automatizaciones que podrían ser útiles.
+6. Preferencias relevantes que puedan mejorar futuras respuestas.
+
+No inventes información.
+Utiliza únicamente los datos proporcionados.
+
+PREFERENCIAS CONOCIDAS:
+
+{contexto_preferencias}
+
+
+HISTORIAL RECIENTE:
+
 {chr(10).join(bitacora_resumen[:50])}
 
-Responde en espanol, de forma concisa y estructurada."""
+
+Responde en español.
+Sé conciso y estructurado.
+""".strip()
 
     print("🧠 Analizando tus actividades...")
 
     respuesta = chat_simple(
-        [{"role": "user", "content": prompt}],
-        model=CONFIG.get("models", {}).get("agent", "maid:latest"),
-        num_predict=400,
-        temperature=0.3
+        [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+        model=MODEL_AGENT,
+        num_predict=500,
+        temperature=0.3,
     )
 
-    if respuesta and hasattr(respuesta, 'message'):
-        patrones = respuesta.message.content.strip()
-    else:
-        patrones = "No se pudo generar analisis."
+    patrones = clean_response(respuesta)
 
-    print(f"\n📊 Patrones detectados:\n{patrones}\n")
+    if not patrones:
+        patrones = "No se pudo generar el análisis."
 
-    # Guardar en preferencias
-    from memory.manager import set_preferencia
+    print(
+        f"\n📊 Patrones detectados:\n"
+        f"{patrones}\n"
+    )
+
+    # ---------------------------------------------------------
+    # Guardar aprendizaje
+    # ---------------------------------------------------------
+
     fecha = datetime.now().strftime("%Y-%m-%d")
-    set_preferencia(f"patrones_{fecha}", patrones[:500])
-    print("✓ Memoria actualizada con tus patrones de uso.")
+
+    set_preferencia(
+        f"patrones_{fecha}",
+        patrones[:2000],
+    )
+
+    print(
+        "✓ Memoria actualizada con los patrones de uso."
+    )
+
 
 if __name__ == "__main__":
     main()

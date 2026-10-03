@@ -316,42 +316,6 @@ ALL_SCHEMAS: List[Dict] = [
             }
         }
     },
-
-    {
-        "type": "function",
-        "function": {
-            "name": "eliminar_archivo",
-            "description": "Mueve un archivo a la papelera reversible de Yuna. No borra carpetas ni elimina permanentemente. Requiere confirmación.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ruta": {
-                        "type": "string",
-                        "description": "Ruta exacta del archivo que se desea enviar a la papelera"
-                    }
-                },
-                "required": ["ruta"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "restaurar_archivo",
-            "description": "Restaura un archivo desde la papelera de Yuna usando el ID de restauración devuelto por eliminar_archivo. Requiere confirmación.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "token": {
-                        "type": "string",
-                        "description": "ID de restauración del archivo eliminado"
-                    }
-                },
-                "required": ["token"]
-            }
-        }
-    },
-
 ]
 
 def get_schema(name: str) -> Dict:

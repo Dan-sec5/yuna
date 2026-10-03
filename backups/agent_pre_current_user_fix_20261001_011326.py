@@ -1624,23 +1624,6 @@ Ahora responde ÚNICAMENTE la pregunta del usuario.
         for msg in self.history[-4:]:
             ctx_selector.append(msg)
 
-        # ---------------------------------------------------------
-        # MENSAJE ACTUAL DEL USUARIO
-        # ---------------------------------------------------------
-        #
-        # El historial contiene únicamente turnos anteriores.
-        # La solicitud actual debe agregarse explícitamente antes
-        # de entrar al tool loop.
-        #
-        # Sin esto, Ollama recibe system + memoria + historial,
-        # pero NO sabe qué acaba de pedir el usuario.
-        # ---------------------------------------------------------
-
-        ctx_selector.append({
-            "role": "user",
-            "content": user_input,
-        })
-
         # TOOL LOOP MULTI-STEP
         # ---------------------------------------------------------
         #

@@ -1,4 +1,3 @@
-from pathlib import Path
 import sys, os
 sys.path.insert(0, os.path.expanduser("~/yuna"))
 import pytest
@@ -186,45 +185,3 @@ def test_inspeccionar_proyecto(tmp_path):
 
     assert resultado["archivos_analizados"] >= 1
     assert any(x["archivo"] == "demo.py" for x in resultado["python"])
-
-
-
-def test_eliminar_y_restaurar_archivo(tmp_path):
-    from tools.archivos import eliminar_archivo, restaurar_archivo
-
-    # La tool solo permite directorios autorizados; usamos /tmp.
-    ruta = Path("/tmp") / "yuna_test_trash.txt"
-    ruta.write_text("hola papelera", encoding="utf-8")
-
-    eliminado = eliminar_archivo(str(ruta))
-    assert isinstance(eliminado, dict)
-    assert eliminado["ok"] is True
-    assert eliminado["accion"] == "movido_a_papelera"
-    assert eliminado["token"]
-    assert ruta.exists() is False
-    assert not ruta.exists()
-
-    token = eliminado["token"]
-    restaurado = restaurar_archivo(token)
-
-    assert "Archivo restaurado" in restaurado
-    assert ruta.exists()
-    assert ruta.read_text(encoding="utf-8") == "hola papelera"
-
-    ruta.unlink(missing_ok=True)
-
-
-def test_eliminar_archivo_no_borra_carpetas():
-    from tools.archivos import eliminar_archivo
-
-    resultado = eliminar_archivo("~/yuna/tools")
-    assert isinstance(resultado, dict)
-    assert resultado["ok"] is False
-    assert resultado["error"] == "solo_archivos"
-
-
-def test_permisos_papelera_requieren_confirmacion():
-    from tools.permisos import check_permission, PermissionLevel
-
-    assert check_permission("eliminar_archivo") == PermissionLevel.CONFIRM
-    assert check_permission("restaurar_archivo") == PermissionLevel.CONFIRM

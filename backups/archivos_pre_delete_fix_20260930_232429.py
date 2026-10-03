@@ -329,147 +329,59 @@ def _ruta_archivo_permitida(ruta: str) -> Path:
     raise PermissionError(f"Ruta no permitida: {ruta}")
 
 
-def eliminar_archivo(ruta: str):
+def eliminar_archivo(ruta: str) -> str:
     """
-    Mueve un archivo a la papelera interna de Yuna y verifica
-    físicamente que haya desaparecido de su ubicación original.
+    Mueve un archivo a la papelera interna de Yuna.
+    No elimina carpetas ni borra permanentemente.
     """
     import json
     import uuid
 
     origen = _ruta_archivo_permitida(ruta)
 
-    if not origen.exists() and not origen.is_symlink():
-        return {
-            "ok": False,
-            "error": "archivo_no_encontrado",
-            "ruta": str(origen),
-        }
-
-    if origen.is_dir():
-        return {
-            "ok": False,
-            "error": "solo_archivos",
-            "ruta": str(origen),
-        }
+    if not origen.exists():
+        return f"⚠ Archivo no encontrado: {origen}"
+    if not origen.is_file():
+        return "⛔ Solo se pueden eliminar archivos, no carpetas."
 
     trash = _trash_root()
 
+    # Evitar intentar eliminar elementos que ya están en la papelera.
     try:
         origen.relative_to(trash)
-        return {
-            "ok": False,
-            "error": "ya_en_papelera",
-            "ruta": str(origen),
-        }
+        return "⛔ El archivo ya está dentro de la papelera de Yuna."
     except ValueError:
         pass
 
-    token = (
-        f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_"
-        f"{uuid.uuid4().hex[:8]}"
-    )
-
+    token = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
     destino = trash / f"{token}__{origen.name}"
     metadata = trash / f"{token}.json"
 
     try:
-        ruta_original = str(origen)
-
-        shutil.move(
-            str(origen),
-            str(destino)
-        )
-
-        # -------------------------------------------------
-        # VERIFICACIÓN FÍSICA
-        # -------------------------------------------------
-
-        origen_sigue = (
-            origen.exists()
-            or origen.is_symlink()
-        )
-
-        destino_existe = (
-            destino.exists()
-            or destino.is_symlink()
-        )
-
-        if origen_sigue or not destino_existe:
-
-            # Si quedó una copia en papelera pero el original
-            # sigue existiendo, retiramos la copia para no
-            # informar un borrado inexistente.
-            if destino_existe and origen_sigue:
-                try:
-                    destino.unlink()
-                except OSError:
-                    pass
-
-            return {
-                "ok": False,
-                "error": "verificacion_fallida",
-                "ruta_original": ruta_original,
-                "origen_existe": origen_sigue,
-                "destino_existe": destino_existe,
-            }
-
+        shutil.move(str(origen), str(destino))
         metadata.write_text(
-            json.dumps(
-                {
-                    "token": token,
-                    "nombre": origen.name,
-                    "ruta_original": ruta_original,
-                    "ruta_papelera": str(destino),
-                    "eliminado": datetime.now().isoformat(
-                        timespec="seconds"
-                    ),
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
+            json.dumps({
+                "token": token,
+                "nombre": origen.name,
+                "ruta_original": str(origen),
+                "ruta_papelera": str(destino),
+                "eliminado": datetime.now().isoformat(timespec="seconds"),
+            }, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
-        # Segunda comprobación después de escribir metadata.
-        if origen.exists() or origen.is_symlink():
-            return {
-                "ok": False,
-                "error": "origen_reaparecio",
-                "ruta_original": ruta_original,
-            }
-
-        return {
-            "ok": True,
-            "accion": "movido_a_papelera",
-            "ruta_original": ruta_original,
-            "ruta_papelera": str(destino),
-            "token": token,
-            "origen_existe": False,
-            "destino_existe": True,
-        }
-
+        return (
+            f"✓ Archivo enviado a la papelera: {origen}\n"
+            f"ID restauración: {token}"
+        )
     except Exception as e:
-
-        # Intentar revertir si el movimiento quedó a medias.
+        # Si se movió pero falló metadata, intentar devolverlo.
         try:
-            if (
-                (destino.exists() or destino.is_symlink())
-                and not (origen.exists() or origen.is_symlink())
-            ):
-                shutil.move(
-                    str(destino),
-                    str(origen)
-                )
+            if destino.exists() and not origen.exists():
+                shutil.move(str(destino), str(origen))
         except Exception:
             pass
+        return f"⚠ Error enviando archivo a papelera: {e}"
 
-        return {
-            "ok": False,
-            "error": "excepcion",
-            "detalle": str(e),
-            "ruta": str(origen),
-        }
 
 def restaurar_archivo(token: str) -> str:
     """Restaura un archivo eliminado por Yuna usando su ID de restauración."""

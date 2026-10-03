@@ -123,40 +123,6 @@ def _extraer_espanol(texto: str) -> str:
         return ' '.join(resultado[:3])
     return lineas[-1] if lineas else texto
 
-_TOOL_ACTION_PATTERN = re.compile(
-    r"\b("
-    r"crea|crear|créame|creame|genera|generar|guarda|guardar|"
-    r"edita|editar|modifica|modificar|corrige|corregir|"
-    r"elimina|eliminar|borra|borrar|"
-    r"restaura|restaurar|recupera|recuperar|"
-    r"ejecuta|ejecutar|corre|correr|prueba|probar|"
-    r"inspecciona|inspeccionar|"
-    r"busca|buscar|encuentra|encontrar|"
-    r"lee|leer|revisa|revisar|analiza|analizar|"
-    r"notifica|notificar|"
-    r"información del sistema|informacion del sistema|"
-    r"info del sistema"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def _solicitud_requiere_tool(user_input: str) -> bool:
-    """
-    Detecta solicitudes que implican consultar o modificar
-    el sistema real y por tanto deberían usar una tool.
-    """
-    if not user_input:
-        return False
-
-    return bool(
-        _TOOL_ACTION_PATTERN.search(
-            user_input
-        )
-    )
-
-
-
 def _respuesta_agente_valida(contenido: str, resultados_tools: list) -> bool:
     """
     Determina si la respuesta final de Qwen puede entregarse al usuario.
@@ -830,100 +796,6 @@ class YunaAgent:
 
 
             tool_calls = get_tool_calls(response)
-
-            # -------------------------------------------------
-            # RECUPERACIÓN DE TOOL CALL
-            # -------------------------------------------------
-            #
-            # Algunos modelos locales pueden entender correctamente
-            # la intención pero responder con frases como:
-            #
-            #   "¿Desea que cree el archivo?"
-            #
-            # en vez de emitir el tool_call.
-            #
-            # Si la solicitud es claramente operativa y todavía
-            # no se ejecutó ninguna herramienta, hacemos UN segundo
-            # intento con instrucciones estrictas.
-            # -------------------------------------------------
-
-            if (
-                not tool_calls
-                and step == 0
-                and _solicitud_requiere_tool(user_input)
-            ):
-                contenido_fallido = clean_response(response)
-
-                logger.warning(
-                    "Solicitud operativa sin tool_call. "
-                    "Forzando segundo intento. Respuesta original: %s",
-                    contenido_fallido[:200],
-                )
-
-                mensajes_retry = list(messages)
-
-                mensajes_retry.append({
-                    "role": "system",
-                    "content": (
-                        "CORRECCIÓN OBLIGATORIA DE EJECUCIÓN:\n"
-                        "La solicitud actual requiere una acción real "
-                        "y existe una herramienta disponible para realizarla.\n"
-                        "NO respondas en lenguaje natural.\n"
-                        "NO pidas permiso al usuario.\n"
-                        "NO digas que no tienes la capacidad.\n"
-                        "Selecciona AHORA la herramienta apropiada y "
-                        "realiza un tool_call con los argumentos necesarios.\n"
-                        "Las confirmaciones de seguridad son responsabilidad "
-                        "del ToolExecutor y de la interfaz, no tuyas.\n"
-                        "Si se solicita crear un archivo, usa crear_archivo.\n"
-                        "Si se solicita editarlo, usa editar_archivo.\n"
-                        "Si se solicita eliminarlo, usa eliminar_archivo.\n"
-                        "Si se solicita restaurarlo, usa restaurar_archivo.\n"
-                        "Si se solicita ejecutar Python, usa ejecutar_python.\n"
-                        "Si se solicita inspeccionar un proyecto, "
-                        "usa inspeccionar_proyecto."
-                    )
-                })
-
-                response_retry = chat_with_tools(
-                    mensajes_retry,
-                    ALL_SCHEMAS,
-                    model=MODEL_AGENT,
-                    num_predict=400,
-                    temperature=0.0,
-                )
-
-                retry_calls = get_tool_calls(
-                    response_retry
-                )
-
-                if retry_calls:
-                    logger.info(
-                        "Tool recovery OK: %s",
-                        [
-                            call.get("name")
-                            for call in retry_calls
-                        ],
-                    )
-
-                    response = response_retry
-                    tool_calls = retry_calls
-
-                else:
-                    logger.error(
-                        "El modelo ignoró nuevamente las tools "
-                        "para una solicitud operativa."
-                    )
-
-                    return (
-                        response_retry or response,
-                        [
-                            "[TOOL_REQUIRED] "
-                            "La solicitud requería una herramienta "
-                            "pero el modelo no produjo un tool_call."
-                        ],
-                        tool_names,
-                    )
 
             # -------------------------------------------------
             # No hay más herramientas
@@ -1623,23 +1495,6 @@ Ahora responde ÚNICAMENTE la pregunta del usuario.
             )
         for msg in self.history[-4:]:
             ctx_selector.append(msg)
-
-        # ---------------------------------------------------------
-        # MENSAJE ACTUAL DEL USUARIO
-        # ---------------------------------------------------------
-        #
-        # El historial contiene únicamente turnos anteriores.
-        # La solicitud actual debe agregarse explícitamente antes
-        # de entrar al tool loop.
-        #
-        # Sin esto, Ollama recibe system + memoria + historial,
-        # pero NO sabe qué acaba de pedir el usuario.
-        # ---------------------------------------------------------
-
-        ctx_selector.append({
-            "role": "user",
-            "content": user_input,
-        })
 
         # TOOL LOOP MULTI-STEP
         # ---------------------------------------------------------

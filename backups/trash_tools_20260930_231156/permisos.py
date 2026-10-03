@@ -25,8 +25,6 @@ _PERMISSIONS = {
     "notificar": PermissionLevel.SAFE,
     "inspeccionar_proyecto": PermissionLevel.SAFE,
     "organizar_archivos": PermissionLevel.CONFIRM,
-    "eliminar_archivo": PermissionLevel.CONFIRM,
-    "restaurar_archivo": PermissionLevel.CONFIRM,
     "crear_archivo": PermissionLevel.SAFE,
     "ejecutar_bash_seguro": PermissionLevel.CONFIRM,
     "editar_archivo": PermissionLevel.CONFIRM,
