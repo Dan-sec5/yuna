@@ -27,6 +27,12 @@ from typing import Iterable
 sys.path.insert(0, os.path.expanduser("~/yuna"))
 
 from PIL import Image, ImageOps
+
+from tools.registry import TOOLS
+from interface.avatar_context import (
+    avatar_state,
+    avatar_resolver,
+)
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -89,48 +95,11 @@ CONFIG = load_config()
 # ---------------------------------------------------------------------------
 def find_avatar() -> Path | None:
     """
-    Busca el avatar principal de Yuna.
-
-    Prioridad:
-    1. ~/yuna/assets/avatars/Avatar.*
-    2. Compatibilidad con rutas antiguas en ~/yuna
+    Devuelve el avatar apropiado para el contexto actual.
     """
-    root = Path.home() / "yuna"
-    avatar_dir = root / "assets" / "avatars"
-
-    candidates = [
-        avatar_dir / "Avatar.png",
-        avatar_dir / "Avatar.jpg",
-        avatar_dir / "Avatar.jpeg",
-        avatar_dir / "Avatar.webp",
-        avatar_dir / "Avatar.gif",
-
-        avatar_dir / "avatar.png",
-        avatar_dir / "avatar.jpg",
-        avatar_dir / "avatar.jpeg",
-        avatar_dir / "avatar.webp",
-        avatar_dir / "avatar.gif",
-
-        # Compatibilidad antigua
-        root / "Avatar.png",
-        root / "Avatar.jpg",
-        root / "Avatar.jpeg",
-        root / "avatar.png",
-        root / "avatar.jpg",
-        root / "avatar.jpeg",
-        root / "avatar.webp",
-        root / "avatar.gif",
-    ]
-
-    return next(
-        (
-            candidate
-            for candidate in candidates
-            if candidate.exists() and candidate.is_file()
-        ),
-        None,
+    return avatar_resolver.resolve(
+        avatar_state.get()
     )
-
 
 def hexrgb(rgb: tuple[int, int, int]) -> str:
     return "#{:02x}{:02x}{:02x}".format(*rgb)
@@ -412,10 +381,19 @@ class AgentBridge:
     Corre el procesamiento en threads y notifica al TUI vía callback.
     """
 
-    def __init__(self, log_callback, status_callback, done_callback):
+    def __init__(
+        self,
+        log_callback,
+        status_callback,
+        done_callback,
+        state_callback=None,
+    ):
         self.log = log_callback
         self.status = status_callback
         self.done = done_callback
+        self.state = state_callback or (
+            lambda **kwargs: None
+        )
         self._agent = None
         self._chat_messages = []
         self._mode = "agent"  # "agent" | "chat"
@@ -551,6 +529,12 @@ class AgentBridge:
             return
 
         self._busy = True
+
+        self.state(
+            agent_state="thinking",
+            mood="focused",
+        )
+
         self.status("Procesando...")
         threading.Thread(
             target=self._process_thread,
@@ -560,6 +544,10 @@ class AgentBridge:
 
     def _process_thread(self, user_input: str):
         try:
+            self.state(
+                agent_state="working",
+                mood="focused",
+            )
             if self._mode == "agent" and self._agent:
                 from memory.manager import add_episodic
                 respuesta = self._agent.process(user_input)
@@ -581,11 +569,28 @@ class AgentBridge:
                 self._chat_messages.append({"role": "assistant", "content": respuesta})
                 add_episodic("chat", f"Luis: {user_input[:100]} | Yuna: {respuesta[:100]}")
 
-            self.log(f"[bold #ff2ed1]YUNA[/]  > {respuesta}")
+            self.log(
+                f"[bold #ff2ed1]YUNA[/]  > {respuesta}"
+            )
+
+            self.state(
+                agent_state="success",
+                mood="happy",
+            )
+
             self.status("Listo")
             self.done(respuesta)
         except Exception as e:
-            self.log(f"[bold red]ERROR[/]  {e}")
+
+            self.state(
+                agent_state="error",
+                mood="concerned",
+            )
+
+            self.log(
+                f"[bold red]ERROR[/]  {e}"
+            )
+
             self.status("Error")
             self.done("")
         finally:
@@ -744,16 +749,27 @@ class YunaTUI(App):
                     id="identity",
                     markup=True,
                 )
+                ctx = avatar_state.get()
+
                 yield Static(
                     "SYSTEM\n"
                     "──────────────────\n"
                     f"MODEL     [#13e7ff]{(CONFIG.get('models') or {}).get('chat', 'maid:latest')}[/]\n"
                     "MEMORY    [#48ff91]READY[/]\n"
-                    "PLANNER   [#48ff91]READY[/]\n"
-                    "TOOLS     [#ffe66d]07[/]\n"
-                    "VOZ       [#48ff91]ON[/]\n\n"
+                    f"TOOLS     [#ffe66d]{len(TOOLS):02d}[/]\n"
+                    "VOZ       [#48ff91]ON[/]\n"
+                    "\n"
+                    "AVATAR CONTEXT\n"
+                    "──────────────────\n"
+                    f"STATE     [#13e7ff]{ctx.agent_state.upper()}[/]\n"
+                    f"HUMOR     [#ff2ed1]{ctx.mood.upper()}[/]\n"
+                    f"HORA      [#ffe66d]{ctx.time_of_day.upper()}[/]\n"
+                    f"CLIMA     [#48ff91]{ctx.weather.upper()}[/]\n"
+                    "\n"
                     "COMANDOS\n"
-                    "/chat  /agent\n/voz   /clear\n/salir",
+                    "/chat  /agent\n"
+                    "/voz   /clear\n"
+                    "/salir",
                     id="stats",
                     markup=True,
                 )
@@ -839,15 +855,101 @@ class YunaTUI(App):
         self.set_interval(1.0, self._heartbeat)
 
     def _heartbeat(self) -> None:
+        """
+        Refresca el estado operativo y el contexto visual.
+
+        Este método corre desde el ciclo de Textual, así que
+        aquí se realizan las modificaciones de widgets.
+        """
         stamp = time.strftime("%H:%M:%S")
+
+        # Hora / humor ambiental.
+        avatar_state.update()
+        ctx = avatar_state.get()
+
+        # -----------------------------------------------------
+        # Avatar
+        # -----------------------------------------------------
+
+        current_avatar = find_avatar()
+
+        if current_avatar != self.avatar_path:
+            self.avatar_path = current_avatar
+
+            try:
+                widget = self.query_one(
+                    AvatarWidget
+                )
+
+                widget.avatar_path = current_avatar
+                widget.refresh_avatar()
+
+            except Exception:
+                pass
+
+        # -----------------------------------------------------
+        # Estado del agente
+        # -----------------------------------------------------
+
         mode = self.bridge._mode.upper()
-        busy = "BUSY" if self.bridge._busy else "IDLE"
-        self.query_one("#activity", Static).update(
+
+        busy = (
+            "BUSY"
+            if self.bridge._busy
+            else "IDLE"
+        )
+
+        self.query_one(
+            "#activity",
+            Static,
+        ).update(
             "ACTIVITY\n"
             "──────────────────\n"
             f"[#647a8a]{stamp}[/] heartbeat    [#48ff91]OK[/]\n"
             f"[#647a8a]{stamp}[/] mode         [#13e7ff]{mode}[/]\n"
-            f"[#647a8a]{stamp}[/] agent        [#13e7ff]{busy}[/]",
+            f"[#647a8a]{stamp}[/] agent        [#13e7ff]{busy}[/]"
+        )
+
+        # -----------------------------------------------------
+        # Panel contextual
+        # -----------------------------------------------------
+
+        voice_status = (
+            "[#48ff91]ON[/]"
+            if self.voz_enabled
+            else "[#647a8a]OFF[/]"
+        )
+
+        model = (
+            CONFIG.get("models")
+            or {}
+        ).get(
+            "chat",
+            "maid:latest",
+        )
+
+        self.query_one(
+            "#stats",
+            Static,
+        ).update(
+            "SYSTEM\n"
+            "──────────────────\n"
+            f"MODEL     [#13e7ff]{model}[/]\n"
+            "MEMORY    [#48ff91]READY[/]\n"
+            f"TOOLS     [#ffe66d]{len(TOOLS):02d}[/]\n"
+            f"VOZ       {voice_status}\n"
+            "\n"
+            "AVATAR CONTEXT\n"
+            "──────────────────\n"
+            f"STATE     [#13e7ff]{ctx.agent_state.upper()}[/]\n"
+            f"HUMOR     [#ff2ed1]{ctx.mood.upper()}[/]\n"
+            f"HORA      [#ffe66d]{ctx.time_of_day.upper()}[/]\n"
+            f"CLIMA     [#48ff91]{ctx.weather.upper()}[/]\n"
+            "\n"
+            "COMANDOS\n"
+            "/chat  /agent\n"
+            "/voz   /clear\n"
+            "/salir"
         )
 
     # ------------------------------------------------------------------
@@ -864,6 +966,16 @@ class YunaTUI(App):
     def _on_agent_done(self, respuesta: str):
         bar = self.query_one("#progressbar", ProgressBar)
         bar.update(progress=100)
+
+        # Mantener brevemente el estado success/happy y
+        # regresar después a idle/neutral.
+        self.set_timer(
+            2.5,
+            lambda: self._set_avatar_context(
+                agent_state="idle",
+                mood="neutral",
+            ),
+        )
         if respuesta and self.voz_enabled:
             try:
                 from interface.voice import hablar
