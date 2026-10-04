@@ -124,3 +124,56 @@ def test_specific_avatar_has_priority(
     )
 
     assert result == specific
+
+
+def test_ambient_mood():
+    from interface.avatar_context import ambient_mood
+
+    assert ambient_mood(
+        datetime(2026, 1, 1, 2, 0)
+    ) == "sleepy"
+
+    assert ambient_mood(
+        datetime(2026, 1, 1, 8, 0)
+    ) == "happy"
+
+    assert ambient_mood(
+        datetime(2026, 1, 1, 14, 0)
+    ) == "focused"
+
+    assert ambient_mood(
+        datetime(2026, 1, 1, 20, 0)
+    ) == "neutral"
+
+
+def test_explicit_mood_has_ttl():
+    from interface.avatar_context import AvatarState
+
+    state = AvatarState()
+
+    state.update(
+        agent_state="success",
+        mood="happy",
+    )
+
+    ctx = state.get()
+
+    assert ctx.mood == "happy"
+    assert state.mood_remaining() > 0
+
+
+def test_idle_does_not_immediately_destroy_mood():
+    from interface.avatar_context import AvatarState
+
+    state = AvatarState()
+
+    state.update(
+        agent_state="success",
+        mood="happy",
+    )
+
+    state.update(
+        agent_state="idle",
+    )
+
+    assert state.get().mood == "happy"

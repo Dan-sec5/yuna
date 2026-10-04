@@ -11,5 +11,10 @@
     "paths": {
         "memory_db": "~/yuna/data/yuna.db",
         "memory_txt_legacy": "~/yuna/memoria.txt"
+    },
+    "weather": {
+        "enabled": true,
+        "location": "Ecatepec de morelos",
+        "refresh_minutes": 45
     }
 }

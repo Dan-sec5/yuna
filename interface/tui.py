@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.expanduser("~/yuna"))
 from PIL import Image, ImageOps
 
 from tools.registry import TOOLS
+from interface.weather import weather_provider
 from interface.avatar_context import (
     avatar_state,
     avatar_resolver,
@@ -36,7 +37,7 @@ from interface.avatar_context import (
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.reactive import reactive
 from textual.widgets import Button, Footer, Header, Input, RichLog, ProgressBar, Static
 
@@ -636,14 +637,20 @@ class YunaTUI(App):
     #right { width: 30; margin-right: 0; }
 
     #avatar {
-        height: 24;
+        height: 20;
         border: solid #ff2ed1;
         background: #000000;
         content-align: center middle;
         padding: 0;
     }
-    #identity { height: 10; color: #c4d3dc; padding: 1; }
-    #stats { height: 1fr; color: #94a6b4; padding: 1; }
+    #identity { height: 8; color: #c4d3dc; padding: 1; }
+    #stats {
+        height: 1fr;
+        min-height: 16;
+        color: #94a6b4;
+        padding: 1;
+        overflow-y: auto;
+    }
 
     #conversation {
         height: 1fr;
@@ -713,6 +720,11 @@ class YunaTUI(App):
 
     def __init__(self):
         super().__init__()
+
+
+        # WeatherProvider se actualiza fuera del thread gráfico.
+        self._weather_refreshing = False
+        self._weather_last_check = 0.0
         self.avatar_path = find_avatar()
         self.voz_enabled = CONFIG.get("voz_enabled", True)
         self.bridge = AgentBridge(
@@ -854,6 +866,75 @@ class YunaTUI(App):
         log.write("[#13e7ff]◈ INPUT[/] waiting for command...")
         self.set_interval(1.0, self._heartbeat)
 
+    def _set_avatar_context(
+        self,
+        *,
+        agent_state: str | None = None,
+        mood: str | None = None,
+        weather: str | None = None,
+        mood_ttl: float | None = None,
+    ) -> None:
+        """
+        Actualiza el contexto lógico del avatar.
+
+        La actualización visual se realiza desde _heartbeat(),
+        dentro del thread principal de Textual.
+        """
+        avatar_state.update(
+            agent_state=agent_state,
+            mood=mood,
+            weather=weather,
+            mood_ttl=mood_ttl,
+        )
+
+
+    def _refresh_weather_async(self) -> None:
+        """
+        Actualiza clima fuera del thread de Textual.
+        """
+
+        if self._weather_refreshing:
+            return
+
+        self._weather_refreshing = True
+
+        def worker():
+            try:
+                snapshot = weather_provider.get()
+
+                avatar_state.update(
+                    weather=snapshot.condition
+                )
+
+            finally:
+                self._weather_refreshing = False
+
+        threading.Thread(
+            target=worker,
+            daemon=True,
+        ).start()
+
+
+    def _maybe_refresh_weather(self) -> None:
+        """
+        Comprueba periódicamente si conviene consultar clima.
+
+        El proveedor tiene su propia caché; esta comprobación
+        solamente evita crear threads innecesarios.
+        """
+
+        now = time.monotonic()
+
+        if (
+            now - self._weather_last_check
+            < 60
+        ):
+            return
+
+        self._weather_last_check = now
+        self._refresh_weather_async()
+
+
     def _heartbeat(self) -> None:
         """
         Refresca el estado operativo y el contexto visual.
@@ -863,9 +944,14 @@ class YunaTUI(App):
         """
         stamp = time.strftime("%H:%M:%S")
 
+        # Clima: consulta asíncrona con caché.
+        self._maybe_refresh_weather()
+
+
         # Hora / humor ambiental.
         avatar_state.update()
         ctx = avatar_state.get()
+        mood_remaining = avatar_state.mood_remaining()
 
         # -----------------------------------------------------
         # Avatar
@@ -943,6 +1029,7 @@ class YunaTUI(App):
             "──────────────────\n"
             f"STATE     [#13e7ff]{ctx.agent_state.upper()}[/]\n"
             f"HUMOR     [#ff2ed1]{ctx.mood.upper()}[/]\n"
+            f"MOOD TTL  [#647a8a]{mood_remaining:4.0f}s[/]\n"
             f"HORA      [#ffe66d]{ctx.time_of_day.upper()}[/]\n"
             f"CLIMA     [#48ff91]{ctx.weather.upper()}[/]\n"
             "\n"
@@ -955,33 +1042,108 @@ class YunaTUI(App):
     # ------------------------------------------------------------------
     # Callbacks
     # ------------------------------------------------------------------
-    def _log(self, message: str):
-        self.query_one("#log", RichLog).write(message)
 
-    def _status(self, message: str):
-        self.query_one("#progressbar", ProgressBar).update(
-            progress=50 if "Procesando" in message else 0
+    def _dispatch_ui(self, callback, *args) -> None:
+        """
+        Ejecuta modificaciones visuales en el thread de Textual.
+
+        AgentBridge procesa solicitudes en un thread secundario.
+        Los widgets, timers y demás operaciones de Textual deben
+        regresar al thread principal de la aplicación.
+        """
+        if threading.current_thread() is threading.main_thread():
+            callback(*args)
+            return
+
+        self.call_from_thread(
+            callback,
+            *args,
         )
 
-    def _on_agent_done(self, respuesta: str):
-        bar = self.query_one("#progressbar", ProgressBar)
-        bar.update(progress=100)
 
-        # Mantener brevemente el estado success/happy y
-        # regresar después a idle/neutral.
+    def _log(self, message: str):
+        self._dispatch_ui(
+            self._log_ui,
+            message,
+        )
+
+
+    def _log_ui(self, message: str):
+        self.query_one(
+            "#log",
+            RichLog,
+        ).write(message)
+
+
+    def _status(self, message: str):
+        self._dispatch_ui(
+            self._status_ui,
+            message,
+        )
+
+
+    def _status_ui(self, message: str):
+        progress = (
+            50
+            if "Procesando" in message
+            else 0
+        )
+
+        self.query_one(
+            "#progressbar",
+            ProgressBar,
+        ).update(
+            progress=progress
+        )
+
+
+    def _on_agent_done(self, respuesta: str):
+        """
+        AgentBridge llama este método desde su worker.
+
+        Redirigimos todo el trabajo visual al event loop
+        principal de Textual.
+        """
+        self._dispatch_ui(
+            self._on_agent_done_ui,
+            respuesta,
+        )
+
+
+    def _on_agent_done_ui(self, respuesta: str):
+        bar = self.query_one(
+            "#progressbar",
+            ProgressBar,
+        )
+
+        bar.update(
+            progress=100
+        )
+
+        # El estado SUCCESS/HAPPY permanece brevemente.
+        # Después solo regresamos el agente a IDLE.
+        # El humor conserva su TTL propio.
         self.set_timer(
             2.5,
             lambda: self._set_avatar_context(
                 agent_state="idle",
-                mood="neutral",
             ),
         )
+
         if respuesta and self.voz_enabled:
             try:
                 from interface.voice import hablar
-                hablar(respuesta)
+
+                # Voz en thread separado para no congelar TUI.
+                threading.Thread(
+                    target=hablar,
+                    args=(respuesta,),
+                    daemon=True,
+                ).start()
+
             except Exception:
                 pass
+
 
     # ------------------------------------------------------------------
     # Input
