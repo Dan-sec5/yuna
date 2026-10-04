@@ -88,19 +88,48 @@ CONFIG = load_config()
 # Avatar
 # ---------------------------------------------------------------------------
 def find_avatar() -> Path | None:
-    """Busca Avatar.png (mayúscula primero), luego variantes."""
-    home = Path.home()
+    """
+    Busca el avatar principal de Yuna.
+
+    Prioridad:
+    1. ~/yuna/assets/avatars/Avatar.*
+    2. Compatibilidad con rutas antiguas en ~/yuna
+    """
+    root = Path.home() / "yuna"
+    avatar_dir = root / "assets" / "avatars"
+
     candidates = [
-        home / "yuna" / "Avatar.png",   # ← el archivo real del proyecto
-        home / "yuna" / "avatar.png",
-        home / "yuna" / "avatar.gif",
-        home / "yuna" / "avatar.jpg",
-        home / "yuna" / "avatar.jpeg",
-        home / "yuna" / "avatar.webp",
-        Path("Avatar.png"),
-        Path("avatar.png"),
+        avatar_dir / "Avatar.png",
+        avatar_dir / "Avatar.jpg",
+        avatar_dir / "Avatar.jpeg",
+        avatar_dir / "Avatar.webp",
+        avatar_dir / "Avatar.gif",
+
+        avatar_dir / "avatar.png",
+        avatar_dir / "avatar.jpg",
+        avatar_dir / "avatar.jpeg",
+        avatar_dir / "avatar.webp",
+        avatar_dir / "avatar.gif",
+
+        # Compatibilidad antigua
+        root / "Avatar.png",
+        root / "Avatar.jpg",
+        root / "Avatar.jpeg",
+        root / "avatar.png",
+        root / "avatar.jpg",
+        root / "avatar.jpeg",
+        root / "avatar.webp",
+        root / "avatar.gif",
     ]
-    return next((p for p in candidates if p.exists() and p.is_file()), None)
+
+    return next(
+        (
+            candidate
+            for candidate in candidates
+            if candidate.exists() and candidate.is_file()
+        ),
+        None,
+    )
 
 
 def hexrgb(rgb: tuple[int, int, int]) -> str:
