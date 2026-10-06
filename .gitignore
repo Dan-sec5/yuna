@@ -52,3 +52,4 @@ aplicar_*.sh
 # Runtime
 logs/
 data/*.db
+data/projects/sessions/*.json

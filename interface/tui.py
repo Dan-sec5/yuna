@@ -1201,6 +1201,40 @@ class YunaTUI(App):
                 f"[#13e7ff]ATTACH[/] {len(attached)} archivo(s) disponible(s)"
             )
 
+        # -----------------------------------------------------
+        # PROJECT MODE
+        # -----------------------------------------------------
+        # Comandos locales: no pasan por Ollama ni por AgentBridge.
+        # Si hay una confirmación de herramienta pendiente,
+        # se respeta primero el flujo de confirmación.
+        # -----------------------------------------------------
+        raw_command = event.value.strip()
+
+        is_project_command = (
+            raw_command == "/project"
+            or raw_command.startswith("/project ")
+        )
+
+        if (
+            is_project_command
+            and getattr(
+                self.bridge,
+                "_pending_confirm",
+                None,
+            ) is None
+        ):
+            from core.project_commands import project_commands
+            from rich.markup import escape
+
+            result = project_commands.handle(raw_command)
+
+            self._log(
+                "[bold #13e7ff]PROJECT[/]\n"
+                + escape(result)
+            )
+
+            return
+
         self.bridge.process(command_for_agent)
 
     def _update_identity(self):
