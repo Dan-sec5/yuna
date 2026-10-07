@@ -91,3 +91,85 @@ def test_fallback_progression():
     )
 
     assert decision.action == "git_status"
+
+
+def test_planner_avoids_repeated_action():
+    planner = ProjectPlanner(
+        llm_call=lambda _: (
+            '{"action":"list_tests",'
+            '"reason":"Otra vez",'
+            '"target":""}'
+        )
+    )
+
+    decision = planner.plan(
+        objective="Investigar",
+        step=3,
+        max_steps=10,
+        remaining_seconds=100,
+        snapshot={
+            "tests": [
+                "tests/test_project_worker.py"
+            ]
+        },
+        recent_history=[
+            (
+                "ACTION=list_tests\n"
+                "RESULT=test_project_worker.py"
+            ),
+            (
+                "ACTION=list_tests\n"
+                "RESULT=test_project_worker.py"
+            ),
+        ],
+    )
+
+    assert decision.action != "list_tests"
+
+
+def test_edit_file_preserves_trailing_newline():
+    planner = ProjectPlanner(
+        llm_call=lambda _: (
+            '{"action":"edit_file",'
+            '"reason":"Editar",'
+            '"target":"sample.py ||| VALUE = 2\\n"}'
+        )
+    )
+
+    decision = planner.plan(
+        objective="Editar archivo",
+        step=0,
+        max_steps=5,
+        remaining_seconds=100,
+        snapshot={},
+    )
+
+    assert decision.action == "edit_file"
+
+    assert decision.target.endswith(
+        "VALUE = 2\n"
+    )
+
+
+def test_create_file_preserves_trailing_newline():
+    planner = ProjectPlanner(
+        llm_call=lambda _: (
+            '{"action":"create_file",'
+            '"reason":"Crear",'
+            '"target":"new.py ||| HELLO = True\\n"}'
+        )
+    )
+
+    decision = planner.plan(
+        objective="Crear archivo",
+        step=0,
+        max_steps=5,
+        remaining_seconds=100,
+        snapshot={},
+    )
+
+    assert decision.action == "create_file"
+
+    assert decision.target.endswith(
+        "HELLO = True\n"
+    )

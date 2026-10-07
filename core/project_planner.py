@@ -10,6 +10,12 @@ ALLOWED_ACTIONS = {
     "inspect_workspace",
     "git_status",
     "list_tests",
+    "read_file",
+    "search_files",
+    "run_tests",
+    "run_safe_command",
+    "edit_file",
+    "create_file",
     "finish",
 }
 
@@ -71,6 +77,12 @@ class ProjectPlanner:
 
             decision = self._parse_decision(raw)
 
+            decision = self._avoid_repetition(
+                decision=decision,
+                snapshot=snapshot,
+                recent_history=history,
+            )
+
             return decision
 
         except Exception:
@@ -93,14 +105,39 @@ class ProjectPlanner:
         recent_history: list[str],
     ) -> str:
 
+        # Contexto deliberadamente pequeño para modelos locales.
+        # El planner decide UNA acción, no necesita tragarse
+        # todo el proyecto en cada iteración.
+        prompt_snapshot = {
+            "workspace": snapshot.get(
+                "workspace",
+                "",
+            ),
+            "top_level": snapshot.get(
+                "top_level",
+                [],
+            )[:35],
+            "tests": snapshot.get(
+                "tests",
+                [],
+            )[:20],
+            "git_status": str(
+                snapshot.get(
+                    "git_status",
+                    "",
+                )
+            )[:1500],
+        }
+
         compact_snapshot = json.dumps(
-            snapshot,
+            prompt_snapshot,
             ensure_ascii=False,
-            indent=2,
+            separators=(",", ":"),
         )
 
-        compact_history = "\n".join(
-            recent_history[-5:]
+        compact_history = "\n---\n".join(
+            entry[:800]
+            for entry in recent_history[-3:]
         )
 
         return f"""
@@ -126,15 +163,70 @@ ACCIONES PERMITIDAS:
 - inspect_workspace
 - git_status
 - list_tests
+- read_file
+- search_files
+- run_tests
+- run_safe_command
+- edit_file
+- create_file
 - finish
+
+USO DE target:
+- read_file:
+  target debe ser una ruta relativa, por ejemplo:
+  "core/agent.py"
+
+- search_files:
+  target debe ser texto o símbolo a buscar, por ejemplo:
+  "AvatarResolver"
+
+- run_tests:
+  target puede estar vacío para toda la suite
+  o ser una ruta como:
+  "tests/test_agent.py"
+
+- run_safe_command:
+  target debe ser un comando diagnóstico de solo lectura,
+  por ejemplo:
+  "git diff --stat"
+
+- edit_file:
+  target debe contener:
+  RUTA ||| CONTENIDO_COMPLETO
+
+  ejemplo:
+  core/example.py ||| VALUE = 42
+
+- create_file:
+  target debe contener:
+  RUTA ||| CONTENIDO_COMPLETO
+
+  ejemplo:
+  notes/example.txt ||| contenido
+
+- inspect_workspace, git_status, list_tests y finish:
+  target debe quedar vacío
 
 REGLAS:
 1. Elige solamente una acción.
 2. No inventes archivos.
 3. No propongas borrar ni modificar nada.
-4. Evita repetir una acción sin necesidad.
-5. Usa finish solamente cuando ya exista suficiente inspección.
-6. Responde únicamente JSON válido.
+4. Lee cuidadosamente RESULT de los pasos anteriores.
+5. No repitas una acción que ya produjo información suficiente.
+6. Después de list_tests, normalmente lee o busca archivos relevantes.
+7. Después de run_tests exitoso, investiga código o termina.
+8. Usa finish solamente cuando ya exista suficiente inspección.
+9. Si RESULT contiene NO_CHANGE, no repitas la misma edición.
+10. Si el archivo ya cumple la intención de la subtarea, continúa o usa finish.
+11. Responde únicamente JSON válido.
+
+REGLAS DE BÚSQUEDA:
+- Para search_files usa nombres de clases, funciones,
+  símbolos o fragmentos técnicos.
+- Prefiere "ProjectRunner", "ProjectWorker", "project_"
+  en vez de frases vagas como "Project Mode".
+- Si una búsqueda no devuelve resultados, cambia el target.
+- Nunca leas dos veces el mismo archivo sin una razón nueva.
 
 FORMATO EXACTO:
 {{
@@ -170,7 +262,7 @@ FORMATO EXACTO:
         response = chat_simple(
             messages,
             temperature=0.2,
-            num_predict=300,
+            num_predict=180,
         )
 
         return clean_response(response)
@@ -208,9 +300,22 @@ FORMATO EXACTO:
             data.get("reason", "")
         ).strip()
 
-        target = str(
+        raw_target = str(
             data.get("target", "")
-        ).strip()
+        )
+
+        # edit_file/create_file transportan contenido completo.
+        # No debemos usar strip(), porque eliminaría saltos
+        # de línea significativos al final del archivo.
+        if action in {
+            "edit_file",
+            "create_file",
+        }:
+            target = raw_target.strip(
+                " \t\r"
+            )
+        else:
+            target = raw_target.strip()
 
         if action not in ALLOWED_ACTIONS:
             raise ValueError(
@@ -225,6 +330,84 @@ FORMATO EXACTO:
             reason=reason,
             target=target,
         )
+
+    def _avoid_repetition(
+        self,
+        *,
+        decision: ProjectDecision,
+        snapshot: dict[str, Any],
+        recent_history: list[str],
+    ) -> ProjectDecision:
+
+        if not recent_history:
+            return decision
+
+        recent_actions = []
+
+        for entry in recent_history[-3:]:
+            match = re.search(
+                r"ACTION=([a-z_]+)",
+                entry,
+            )
+
+            if match:
+                recent_actions.append(
+                    match.group(1)
+                )
+
+        if not recent_actions:
+            return decision
+
+        # Una repetición puede ser válida.
+        # Dos consecutivas iguales ya requieren intervención.
+        if (
+            len(recent_actions) >= 2
+            and recent_actions[-1] == decision.action
+            and recent_actions[-2] == decision.action
+        ):
+            alternatives = [
+                "inspect_workspace",
+                "git_status",
+                "list_tests",
+                "search_files",
+                "read_file",
+                "run_tests",
+                "finish",
+            ]
+
+            for action in alternatives:
+                if action not in recent_actions[-2:]:
+                    if action == "search_files":
+                        return ProjectDecision(
+                            action="search_files",
+                            reason=(
+                                "Evitar repetición y localizar "
+                                "código relacionado con Project Mode."
+                            ),
+                            target="Project",
+                        )
+
+                    if action == "read_file":
+                        continue
+
+                    return ProjectDecision(
+                        action=action,
+                        reason=(
+                            "Acción alternativa seleccionada "
+                            "para evitar un bucle."
+                        ),
+                        target="",
+                    )
+
+            return ProjectDecision(
+                action="finish",
+                reason=(
+                    "Se detectó repetición persistente "
+                    "sin progreso."
+                ),
+            )
+
+        return decision
 
     def _fallback(
         self,

@@ -53,6 +53,11 @@ class ProjectSession:
     pending_tasks: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
+    # Plan persistente de Project Mode.
+    # Se almacena como dict para mantener ProjectSession
+    # desacoplado de la implementación del planner.
+    plan: dict[str, Any] | None = None
+
     @classmethod
     def new(
         cls,

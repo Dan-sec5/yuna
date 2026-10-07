@@ -7,6 +7,9 @@ from core.project_session import (
     ProjectSession,
     utc_now,
 )
+from core.project_plan import (
+    ProjectPlan,
+)
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -235,6 +238,63 @@ class ProjectRunner:
         self.store.save(session)
 
         return session
+
+    # -----------------------------------------------------
+    # Persistent Project Plan
+    # -----------------------------------------------------
+
+    def set_plan(
+        self,
+        plan: ProjectPlan,
+    ) -> ProjectPlan:
+
+        session = self.require_session()
+
+        session.plan = plan.to_dict()
+
+        self.store.save(
+            session
+        )
+
+        return plan
+
+    def get_plan(
+        self,
+    ) -> ProjectPlan | None:
+
+        session = self.require_session()
+
+        if not session.plan:
+            return None
+
+        return ProjectPlan.from_dict(
+            session.plan
+        )
+
+    def save_plan(
+        self,
+        plan: ProjectPlan,
+    ) -> ProjectPlan:
+
+        session = self.require_session()
+
+        session.plan = plan.to_dict()
+
+        self.store.save(
+            session
+        )
+
+        return plan
+
+    def clear_plan(self) -> None:
+
+        session = self.require_session()
+
+        session.plan = None
+
+        self.store.save(
+            session
+        )
 
     def remaining_seconds(self) -> float:
         session = self.require_session()

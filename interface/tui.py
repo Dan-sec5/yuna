@@ -692,12 +692,15 @@ class YunaTUI(App):
         color: #ffffff;
     }
     #progress {
-        height: 5;
+        
         padding: 0 1;
         margin-top: 1;
         border: solid #183b63;
         background: #05070d;
-    }
+    
+        height: 14;
+        min-height: 12;
+}
     #progressbar { margin-top: 1; }
     #diagnostics { height: 1fr; padding: 1; color: #9cb0bf; }
     #activity {
@@ -800,7 +803,16 @@ class YunaTUI(App):
                         "TASK MATRIX  //  CURRENT OPERATION",
                         classes="panel-title",
                     )
-                    yield ProgressBar(total=100, show_eta=False, id="progressbar")
+                    yield Static(
+                        "PROJECT PLAN\n"
+                        "[dim]Sin proyecto activo[/]",
+                        id="project-plan",
+                    )
+                    yield ProgressBar(
+                        total=100,
+                        show_eta=False,
+                        id="progressbar",
+                    )
 
                 yield Static("", id="attachments")
                 with Horizontal(id="command-row"):
@@ -935,6 +947,120 @@ class YunaTUI(App):
         self._refresh_weather_async()
 
 
+    def _refresh_project_matrix(
+        self,
+    ) -> None:
+        try:
+            from core.project_commands import (
+                project_commands,
+            )
+
+            widget = self.query_one(
+                "#project-plan",
+                Static,
+            )
+
+            runner = project_commands.runner
+            session = runner.session
+
+            if session is None:
+                widget.update(
+                    "PROJECT PLAN\n"
+                    "[dim]Sin proyecto activo[/]"
+                )
+                return
+
+            plan = runner.get_plan()
+
+            if plan is None:
+                widget.update(
+                    "PROJECT PLAN\n"
+                    "[dim]Sin plan disponible[/]"
+                )
+                return
+
+            progress = plan.progress()
+
+            completed = progress["completed"]
+            total = progress["total"]
+
+            lines = [
+                "[b #13e7ff]PROJECT PLAN[/]",
+                "",
+            ]
+
+            icons = {
+                "pending": "[dim]○[/]",
+                "in_progress": "[#ffe66d]▶[/]",
+                "completed": "[#48ff91]✓[/]",
+                "blocked": "[bold red]✕[/]",
+                "skipped": "[dim]−[/]",
+            }
+
+            for index, task in enumerate(
+                plan.tasks,
+                start=1,
+            ):
+                icon = icons.get(
+                    task.status,
+                    "○",
+                )
+
+                title = task.title
+
+                if len(title) > 44:
+                    title = title[:41] + "..."
+
+                lines.append(
+                    f"{icon} {index:02d}  {title}"
+                )
+
+            current = plan.current_task()
+
+            lines.extend([
+                "",
+                (
+                    "[b]PROGRESS[/]  "
+                    f"[#13e7ff]{completed}/{total}[/]"
+                ),
+                (
+                    "[b]CURRENT[/]   "
+                    + (
+                        current.title
+                        if current is not None
+                        else (
+                            "[#48ff91]COMPLETED[/]"
+                            if plan.is_complete()
+                            else "-"
+                        )
+                    )
+                ),
+            ])
+
+            widget.update(
+                "\n".join(lines)
+            )
+
+            if total > 0:
+                percentage = int(
+                    completed
+                    / total
+                    * 100
+                )
+            else:
+                percentage = 0
+
+            self.query_one(
+                "#progressbar",
+                ProgressBar,
+            ).update(
+                progress=percentage
+            )
+
+        except Exception:
+            # El panel visual nunca debe tumbar Yuna.
+            pass
+
     def _heartbeat(self) -> None:
         """
         Refresca el estado operativo y el contexto visual.
@@ -942,6 +1068,8 @@ class YunaTUI(App):
         Este método corre desde el ciclo de Textual, así que
         aquí se realizan las modificaciones de widgets.
         """
+        self._refresh_project_matrix()
+
         stamp = time.strftime("%H:%M:%S")
 
         # Clima: consulta asíncrona con caché.

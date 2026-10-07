@@ -53,3 +53,5 @@ aplicar_*.sh
 logs/
 data/*.db
 data/projects/sessions/*.json
+data/projects/transactions/*
+!data/projects/transactions/.gitkeep
